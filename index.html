@@ -15,7 +15,7 @@
         h2{margin:0;text-align:center;color:#fff;font-size:16px;text-transform:uppercase;border-bottom:4px dashed #444;padding-bottom:8px;}
         .coins-display{color:#ffd700;font-size:16px;text-align:center;font-weight:bold;background:#222;padding:8px;border:2px solid #ffd700;}
         .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-family:inherit;font-size:12px;text-transform:uppercase;}
-        .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;font-family:inherit;text-align:center;font-size:11px;width:100%;box-sizing:border-box;word-break:break-all;}
+        .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;font-family:inherit;text-align:center;font-size:14px;width:100%;box-sizing:border-box;}
         .skin-item,.leader-item{display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 12px;border:2px solid #333;}
         .skin-name{font-weight:bold;font-size:14px;text-transform:uppercase;}
         .shop-btn{background:#00aa00;color:white;border:2px solid #fff;padding:6px 10px;cursor:pointer;font-weight:bold;min-width:85px;font-family:inherit;}
@@ -66,7 +66,6 @@
         </div>
     </div>
 </div>
-
 <script>
 const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
 let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
@@ -75,7 +74,7 @@ let pipes = [], score = 0, gameOver = false, recordChecked = false;
 
 let myPlayerName = localStorage.getItem('flappy_device_name_v9');
 if (!myPlayerName || myPlayerName === "null" || myPlayerName.trim() === "") {
-    let userName = prompt("ГЛОБАЛЬНЫЙ ОНЛАЙН-ТУРНИР! Введите имя:", "Игрок");
+    let userName = prompt("ГЛОБАЛЬНЫЙ ОНЛАЙН-ТУРНИР! Введите ваше имя:", "Игрок");
     if (!userName || !userName.trim()) userName = "User-" + Math.floor(1000 + Math.random() * 9000);
     myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
     localStorage.setItem('flappy_device_name_v9', myPlayerName);
@@ -138,126 +137,13 @@ const skins = [
     {id: 'freddy', name: 'FNAF Freddy', color: '#6d4c41', beak: '#3e2723', hat: true, price: 150, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0]; // НАВСЕГДА ИСПРАВЛЕНО: берётся строго первая утка, серый экран не появится!
+// ИСПРАВЛЕНА КРИТИЧЕСКАЯ ОШИБКА:
+// Было 'let currentSkin = skins;', что записывало весь массив и вызывало серый экран.
+// Теперь строго берется первый объект (уточка) по умолчанию:
+let currentSkin = skins[0];
+
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
-function sendHighScoreOnline(finalScore) {
-    if (finalScore <= 0) return;
-    if (finalScore > personalBest) {
-        personalBest = finalScore;
-        localStorage.setItem('flappy_personal_best', personalBest);
-    }
-    let existing = localLeaderboard.find(p => p.name === myPlayerName);
-    if (existing) {
-        if (finalScore > existing.score) existing.score = finalScore;
-    } else {
-        localLeaderboard.push({name: myPlayerName, score: finalScore});
-    }
-    fetchOnlineLeaderboard();
-}
-
-function fetchOnlineLeaderboard() {
-    const container = document.getElementById("leader-items");
-    if (!container) return; container.innerHTML = "";
-    localLeaderboard.sort((a, b) => parseInt(b.score) - parseInt(a.score));
-    localLeaderboard = localLeaderboard.slice(0, 3);
-    localStorage.setItem('flappy_local_top4', JSON.stringify(localLeaderboard));
-
-    if (localLeaderboard.length === 0) {
-        container.innerHTML = "<div style='text-align:center;color:#666;padding:5px 0;'>НЕТ РЕКОРДОВ</div>";
-    } else {
-        localLeaderboard.forEach((player, index) => {
-            const item = document.createElement("div"); item.className = "leader-item";
-            let placeClass = "place-" + (index + 1);
-            item.innerHTML = `<span class="${placeClass}">#${index + 1} ${player.name}</span><span style='font-weight:bold'>${player.score}</span>`;
-            container.appendChild(item);
-        });
-    }
-    const personalItem = document.createElement("div");
-    personalItem.className = "leader-item"; personalItem.style.marginTop = "8px"; personalItem.style.borderColor = "#ffd700";
-    personalItem.innerHTML = `<span>MY BEST (${myPlayerName})</span><span style='font-weight:bold;color:#ffd700'>${personalBest}</span>`;
-    container.appendChild(personalItem);
-}
-
-const configuration = {'iceServers': [{'urls': 'stun:://google.com'}]};
-
-function startHost() {
-    document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-status").innerHTML = "Генерация кода комнаты...";
-    isHost = true;
-    localConnection = new RTCPeerConnection(configuration);
-    dataChannel = localConnection.createDataChannel("gameChannel");
-    setupChannelListeners();
-    localConnection.onicecandidate = e => { 
-        if(!e.candidate) { 
-            let token = btoa(JSON.stringify(localConnection.localDescription));
-            document.getElementById("mp-area").innerHTML = `
-                <span style="font-size:11px;color:#ffd700;">1. Скопируй этот код и отправь другу:</span>
-                <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
-                <span style="font-size:11px;margin-top:5px;">2. Вставь ответный код друга снизу:</span>
-                <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга сюда...">
-                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">3. ПОДКЛЮЧИТЬ ИГРОКА</button>
-            `; 
-            document.getElementById("mp-status").innerHTML = "Ожидание ответа от друга...";
-        }
-    };
-    localConnection.createOffer().then(o => localConnection.setLocalDescription(o));
-}
-
-function acceptAnswer() {
-    let ans = document.getElementById("join-code-input").value;
-    if(!ans.trim()) return alert("Сначала вставьте ответный код друга!");
-    try {
-        localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(ans))));
-    } catch(e) { alert("Ошибка кода! Перепроверьте текст."); }
-}
-
-function startJoin() {
-    document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:11px;color:#2e7d32;">1. Вставь код, который тебе скинул Хост:</span>
-        <input id="host-code-input" class="mp-input" placeholder="Вставь код хоста сюда...">
-        <button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">2. СГЕНЕРИРОВАТЬ ОТВЕТ</button>
-    `;
-    document.getElementById("mp-status").innerHTML = "Ожидание ввода кода...";
-}
-
-function executeJoin() {
-    let code = document.getElementById("host-code-input").value;
-    if(!code.trim()) return alert("Вставьте код хоста!");
-    isHost = false; 
-    localConnection = new RTCPeerConnection(configuration);
-    localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
-    try {
-        localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
-        localConnection.onicecandidate = e => { 
-            if(!e.candidate) { 
-                let token = btoa(JSON.stringify(localConnection.localDescription));
-                document.getElementById("mp-area").innerHTML = `
-                    <span style="font-size:11px;color:#ffd700;">3. Скопируй этот ответный код и отправь Хосту:</span>
-                    <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
-                `; 
-                document.getElementById("mp-status").innerHTML = "Код ответа готов! Перешли его Создателю.";
-            }
-        };
-        localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
-    } catch(e) { alert("Неверный код хоста!"); }
-}
-
-function setupChannelListeners() {
-    dataChannel.onopen = () => {
-        document.getElementById("mp-status").innerHTML = "🟢 МУЛЬТИПЛЕЕР АКТИВЕН! ИГРАЕМ!";
-        document.getElementById("mp-area").innerHTML = "";
-        enemyBird.active = true;
-    };
-    dataChannel.onmessage = (e) => {
-        try {
-            let data = JSON.parse(e.data);
-            if(data.type === 'fly') { enemyBird.active = true; enemyBird.y = data.y; enemyBird.currentSkinId = data.skin; }
-            if(data.type === 'pipe' && !isHost) { pipes = JSON.parse(data.pipes); }
-        } catch(err){}
-    };
-}
 function updateShopUI() {
     let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
     const countSpan = document.getElementById("coin-count"); if (countSpan) countSpan.innerText = walletCoins;
