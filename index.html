@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Freddy Bear</title>
+    <title>Flappy Bird Online: Freddy Bear</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -66,129 +66,127 @@
         </div>
     </div>
 </div> 
-<script> 
-const canvas=document.getElementById("canvas"),ctx=canvas.getContext("2d");
-let bird={x:50,y:150,w:34,h:24,gravity:0.4,velocity:0,jump:-6.2},enemyBird={y:150,active:false,currentSkinId:'default'};
-let pipes=[],score=0,coins=0,gameOver=false,recordChecked=false;
+<script>
+const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
+let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
+let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
+let pipes = [], score = 0, gameOver = false, recordChecked = false;
 
-let myPlayerName=localStorage.getItem('flappy_device_name_v8');
-if(!myPlayerName || myPlayerName === "null" || myPlayerName.trim() === ""){
-    let userName=prompt("ГЛОБАЛЬНЫЙ ОНЛАЙН-ТУРНИР! Введите ваше имя для таблицы лидеров:", "Игрок");
-    if(!userName||!userName.trim()||userName === "Игрок") userName="User-"+Math.floor(1000+Math.random()*9000);
-    myPlayerName=userName.substring(0,10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g,"");
-    localStorage.setItem('flappy_device_name_v8',myPlayerName);
+let myPlayerName = localStorage.getItem('flappy_device_name_v9');
+if (!myPlayerName || myPlayerName === "null" || myPlayerName.trim() === "") {
+    let userName = prompt("ГЛОБАЛЬНЫЙ ОНЛАЙН-ТУРНИР! Введите ваше имя для таблицы лидеров:", "Игрок");
+    if (!userName || !userName.trim() || userName === "Игрок") userName = "User-" + Math.floor(1000 + Math.random() * 9000);
+    myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
+    localStorage.setItem('flappy_device_name_v9', myPlayerName);
 }
 
 let isHost = false, roomId = "", netChannel = null;
-const musicToggle=document.getElementById("music-toggle"),sfxToggle=document.getElementById("sfx-toggle");
-let audioCtx=null,musicInterval=null;
+const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
+let audioCtx = null, musicInterval = null;
 
-function initAudio(){
-    if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
-    if(audioCtx && !musicInterval) startAmbientMusic();
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx && !musicInterval) startAmbientMusic();
 }
 
-function playSound(freq,duration,type='sine',ramp=true){
-    if(!sfxToggle.checked) return;
-    if(!audioCtx) { try { audioCtx=new(window.AudioContext||window.webkitAudioContext)(); } catch(e){return;} }
-    if(audioCtx.state === 'suspended') return;
-    try{
-        let osc=audioCtx.createOscillator(),gainNode=audioCtx.createGain();
-        osc.type=type;osc.frequency.setValueAtTime(freq,audioCtx.currentTime);
-        if(ramp)osc.frequency.exponentialRampToValueAtTime(freq/2,audioCtx.currentTime+duration);
-        gainNode.gain.setValueAtTime(0.15,audioCtx.currentTime);gainNode.gain.linearRampToValueAtTime(0.01,audioCtx.currentTime+duration);
-        osc.connect(gainNode);gainNode.connect(audioCtx.destination);osc.start();osc.stop(audioCtx.currentTime+duration);
-    }catch(e){}
+function playSound(freq, duration, type = 'sine', ramp = true) {
+    if (!sfxToggle.checked) return;
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+    if (audioCtx.state === 'suspended') return;
+    try {
+        let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (ramp) osc.frequency.exponentialRampToValueAtTime(freq / 2, audioCtx.currentTime + duration);
+        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
 }
 
-function startAmbientMusic(){
-    if(musicInterval)clearInterval(musicInterval);
-    let notes=[130.81,146.83,164.81,196.00],step=0;
-    musicInterval=setInterval(() => {
-        if(musicToggle.checked&&audioCtx&&audioCtx.state==='running'&&!gameOver){
-            try{
-                let osc=audioCtx.createOscillator(),gainNode=audioCtx.createGain();
-                osc.type='square';osc.frequency.setValueAtTime(notes[step%notes.length],audioCtx.currentTime);
-                gainNode.gain.setValueAtTime(0.02,audioCtx.currentTime);gainNode.gain.linearRampToValueAtTime(0.001,audioCtx.currentTime+0.8);
-                osc.connect(gainNode);gainNode.connect(audioCtx.destination);osc.start();osc.stop(audioCtx.currentTime+0.8);step++;
-            }catch(e){}
+function startAmbientMusic() {
+    if (musicInterval) clearInterval(musicInterval);
+    let notes = [130.81, 146.83, 164.81, 196.00], step = 0;
+    musicInterval = setInterval(() => {
+        if (musicToggle.checked && audioCtx && audioCtx.state === 'running' && !gameOver) {
+            try {
+                let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(notes[step % notes.length], audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+                osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.8); step++;
+            } catch (e) {}
         }
-    },1000);
+    }, 1000);
 }
 
-let timeProgress=0; 
-function getSkyColor(){
-    timeProgress+=0.0003;if(timeProgress>1)timeProgress=0;
-    let r,g,b;
-    if(timeProgress<0.33){let t=timeProgress/0.33;r=112+(235-112)*t;g=197+(100-197)*t;b=206+(60-206)*t;}
-    else if(timeProgress<0.66){let t=(timeProgress-0.33)/0.33;r=235+(20-235)*t;g=100+(22-100)*t;b=60+(40-60)*t;}
-    else {let t=(timeProgress-0.66)/0.34;r=2+(112-2)*t;g=22+(197-22)*t;b=40+(206-40)*t;}
-    return "rgb("+Math.floor(r)+","+Math.floor(g)+","+Math.floor(b)+")";
+let timeProgress = 0;
+function getSkyColor() {
+    timeProgress += 0.0003; if (timeProgress > 1) timeProgress = 0;
+    let r, g, b;
+    if (timeProgress < 0.33) { let t = timeProgress / 0.33; r = 112 + (235 - 112) * t; g = 197 + (100 - 197) * t; b = 206 + (60 - 206) * t; }
+    else if (timeProgress < 0.66) { let t = (timeProgress - 0.33) / 0.33; r = 235 + (20 - 235) * t; g = 100 + (22 - 100) * t; b = 60 + (40 - 60) * t; }
+    else { let t = (timeProgress - 0.66) / 0.34; r = 2 + (112 - 2) * t; g = 22 + (197 - 22) * t; b = 40 + (206 - 40) * t; }
+    return "rgb(" + Math.floor(r) + "," + Math.floor(g) + "," + Math.floor(b) + ")";
 }
 
-const birdMapRaw=["00000111111000000","00001222222110000","00112222221331000","01225522213113100","12222552213113100","12222222221331000","12222222222111100","1222222224444410","0122222241111410","0011222441114100","0000114444441000","0000001111110000"];
+const birdMapRaw = ["00000111111000000", "00001222222110000", "00112222221331000", "01225522213113100", "12222552213113100", "12222222221331000", "12222222222111100", "1222222224444410", "0122222241111410", "0011222441114100", "0000114444441000", "0000001111110000"];
 
-const skins=[
-    {id:'default',name:'Classic Duck',color:'#f8e71c',beak:'#ff5722',hat:false,price:0,purchased:true},
-    {id:'cyber',name:'Cyber Agent',color:'#00e5ff',beak:'#ff007f',hat:false,price:50,purchased:false},
-    {id:'pirate',name:'Pirate Bird',color:'#4e342e',beak:'#ffb300',hat:true,price:100,purchased:false},
-    {id:'freddy',name:'FNAF Freddy',color:'#6d4c41',beak:'#3e2723',hat:true,price:150,purchased:false},
-    {id:'king',name:'Rich King',color:'#ffd700',beak:'#d84315',hat:true,price:300,purchased:false}
+const skins = [
+    {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true},
+    {id: 'cyber', name: 'Cyber Agent', color: '#00e5ff', beak: '#ff007f', hat: false, price: 50, purchased: false},
+    {id: 'pirate', name: 'Pirate Bird', color: '#4e342e', beak: '#ffb300', hat: true, price: 100, purchased: false},
+    {id: 'freddy', name: 'FNAF Freddy', color: '#6d4c41', beak: '#3e2723', hat: true, price: 150, purchased: false},
+    {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin=skins;
-let personalBest=parseInt(localStorage.getItem('flappy_personal_best'))||0;
-let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top3')) || [];
+let currentSkin = skins[0];
+let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
+let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 
-function sendHighScoreOnline(finalScore){
-    if(finalScore <= 0) return;
-    if(finalScore > personalBest){
+function sendHighScoreOnline(finalScore) {
+    if (finalScore <= 0) return;
+    if (finalScore > personalBest) {
         personalBest = finalScore;
         localStorage.setItem('flappy_personal_best', personalBest);
     }
     let existing = localLeaderboard.find(p => p.name === myPlayerName);
-    if(existing) {
-        if(finalScore > existing.score) existing.score = finalScore;
+    if (existing) {
+        if (finalScore > existing.score) existing.score = finalScore;
     } else {
         localLeaderboard.push({name: myPlayerName, score: finalScore});
     }
     fetchOnlineLeaderboard();
 }
 
-function fetchOnlineLeaderboard(){
-    const container=document.getElementById("leader-items");
-    if(!container) return; container.innerHTML="";
-    localLeaderboard.sort((a,b)=>parseInt(b.score)-parseInt(a.score));
+function fetchOnlineLeaderboard() {
+    const container = document.getElementById("leader-items");
+    if (!container) return; container.innerHTML = "";
+    localLeaderboard.sort((a, b) => parseInt(b.score) - parseInt(a.score));
     localLeaderboard = localLeaderboard.slice(0, 3);
-    localStorage.setItem('flappy_local_top3', JSON.stringify(localLeaderboard));
-    
-    if(localLeaderboard.length === 0) {
+    localStorage.setItem('flappy_local_top4', JSON.stringify(localLeaderboard));
+
+    if (localLeaderboard.length === 0) {
         container.innerHTML = "<div style='text-align:center;color:#666;padding:5px 0;'>НЕТ РЕКОРДОВ</div>";
     } else {
-        localLeaderboard.forEach((player,index)=>{
-            const item=document.createElement("div"); item.className="leader-item";
-            let placeClass="place-"+(index+1);
-            item.innerHTML=`<span class="${placeClass}">#${index+1} ${player.name}</span><span style="font-weight:bold">${player.score}</span>`;
+        localLeaderboard.forEach((player, index) => {
+            const item = document.createElement("div"); item.className = "leader-item";
+            let placeClass = "place-" + (index + 1);
+            item.innerHTML = `<span class="${placeClass}">#${index + 1} ${player.name}</span><span style='font-weight:bold'>${player.score}</span>`;
             container.appendChild(item);
         });
     }
-    const personalItem=document.createElement("div");
-    personalItem.className="leader-item"; personalItem.style.marginTop="8px"; personalItem.style.borderColor="#ffd700";
-    personalItem.innerHTML=`<span>MY BEST (${myPlayerName})</span><span style="font-weight:bold;color:#ffd700">${personalBest}</span>`;
+    const personalItem = document.createElement("div");
+    personalItem.className = "leader-item"; personalItem.style.marginTop = "8px"; personalItem.style.borderColor = "#ffd700";
+    personalItem.innerHTML = `<span>MY BEST (${myPlayerName})</span><span style='font-weight:bold;color:#ffd700'>${personalBest}</span>`;
     container.appendChild(personalItem);
 }
 
-// Сетевой мост через безопасный встроенный канал браузера BroadcastChannel
 function initDirectNetwork(roomCode) {
     netChannel = new BroadcastChannel("flappy_mmo_link_" + roomCode);
-    
     document.getElementById("mp-status").innerHTML = isHost ? "🟢 ОЖИДАНИЕ ДРУГА..." : "🟢 МУЛЬТИПЛЕЕР АКТИВЕН!";
-    if(!isHost) enemyBird.active = true;
+    if (!isHost) enemyBird.active = true;
 
     netChannel.onmessage = (e) => {
         let data = e.data;
-        if(data.sender === myPlayerName) return;
-        
+        if (data.sender === myPlayerName) return;
         if (data.type === 'fly') {
             enemyBird.active = true;
             enemyBird.y = data.y;
@@ -196,145 +194,52 @@ function initDirectNetwork(roomCode) {
             document.getElementById("mp-status").innerHTML = "🟢 ДРУГ В СЕТИ! ИГРАЕМ!";
         }
         if (data.type === 'pipe' && !isHost) {
-            pipes = JSON.parse(data.pipes); // Игрок на телефоне летит по трубам создателя
+            pipes = JSON.parse(data.pipes);
         }
     };
 }
 
-function createOnlineRoom() {
+window.createOnlineRoom = function () {
     isHost = true;
     roomId = "" + Math.floor(100 + Math.random() * 900);
-    
-    let currentLink = window.location.origin + window.location.pathname + "#room" + roomId;
-    
     document.getElementById("mp-menu-buttons").style.display = "none";
     document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:11px;color:#ffd700;">Скопируй ссылку из браузера или этот код:</span>
-        <div class="coins-display" style="font-size:20px;letter-spacing:2px;user-select:all;">${roomId}</div>
+        <span style='font-size:11px;color:#ffd700;'>Скажи другу этот код комнаты:</span>
+        <div class="coins-display" style='font-size:20px;letter-spacing:2px;'>${roomId}</div>
     `;
     initDirectNetwork(roomId);
 }
 
-function showJoinInputs() {
+window.showJoinInputs = function () {
     document.getElementById("mp-menu-buttons").style.display = "none";
     document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:11px;color:#2e7d32;">Введи 3-значный код комнаты друга:</span>
+        <span style='font-size:11px;color:#2e7d32;'>Введи 3-значный код комнаты друга:</span>
         <input id="host-code-input" class="mp-input" type="number" placeholder="Например: 405">
-        <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="executeOnlineJoin()">ПОДКЛЮЧИТЬСЯ</button>
+        <button class="mp-btn" style='margin-top:5px;background:#2e7d32;width:100%;' onclick="executeOnlineJoin()">ПОДКЛЮЧИТЬСЯ</button>
     `;
     document.getElementById("mp-status").innerHTML = "Ввод кода комнаты...";
 }
 
-function executeOnlineJoin() {
+window.executeOnlineJoin = function () {
     let inputCode = document.getElementById("host-code-input").value;
-    if(!inputCode.trim()) return alert("Введите код комнаты!");
-    isHost = false;
-    roomId = inputCode.trim();
+    if (!inputCode.trim()) return alert("Введите код комнаты!");
+    isHost = false; roomId = inputCode.trim();
     document.getElementById("mp-area").innerHTML = `<div class="coins-display">Комната: ${roomId}</div>`;
     initDirectNetwork(roomId);
 }
 
-// Автоматический вход по хэш-ссылке
-if(window.location.hash && window.location.hash.includes("#room")) {
-    let hashId = window.location.hash.replace("#room", "").trim();
-    if(hashId) {
-        isHost = false;
-        roomId = hashId;
-        setTimeout(() => initDirectNetwork(roomId), 600);
-    }
+function updateShopUI() {
+    let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
+    const countSpan = document.getElementById("coin-count"); if (countSpan) countSpan.innerText = walletCoins;
+    const container = document.getElementById("shop-items"); if (!container) return; container.innerHTML = "";
+    skins.forEach(skin => {
+        let isSavedPurchased = localStorage.getItem('skin_buy_' + skin.id) || skin.price === 0; if (isSavedPurchased) skin.purchased = true;
+        const item = document.createElement("div"); item.className = "skin-item";
+        let btnText = skin.purchased ? "EQUIP" : skin.price + ""; let btnClass = "shop-btn"; if (skin.id === currentSkin.id) { btnText = "ACTIVE"; btnClass += " equipped"; }
+        let isLocked = (!skin.purchased) && (walletCoins < skin.price); let disabledAttr = isLocked ? "disabled" : "";
+        item.innerHTML = "<div class=\"skin-info\"><span class=\"skin-name\">" + skin.name + "</span></div><button class=\"" + btnClass + "\" " + disabledAttr + " onclick=\"buyOrEquip('" + skin.id + "')\">" + btnText + "</button>"; container.appendChild(item);
+    });
 }
-    function updateShopUI() {
-        let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
-        const countSpan = document.getElementById("coin-count"); if(countSpan) countSpan.innerText = walletCoins;
-        const container = document.getElementById("shop-items"); if(!container) return; container.innerHTML = "";
-        skins.forEach(skin => {
-            let isSavedPurchased = localStorage.getItem('skin_buy_' + skin.id) || skin.price === 0; if(isSavedPurchased) skin.purchased = true;
-            const item = document.createElement("div"); item.className = "skin-item";
-            let btnText = skin.purchased ? "EQUIP" : skin.price + ""; let btnClass = "shop-btn"; if(skin.id === currentSkin.id){btnText = "ACTIVE"; btnClass += " equipped";}
-            let isLocked = (!skin.purchased) && (walletCoins < skin.price); let disabledAttr = isLocked ? "disabled" : "";
-            item.innerHTML = "<div class=\"skin-info\"><span class=\"skin-name\">" + skin.name + "</span></div><button class=\"" + btnClass + "\" " + disabledAttr + " onclick=\"buyOrEquip('" + skin.id + "')\">" + btnText + "</button>"; container.appendChild(item);
-        });
-    }
 
-    window.buyOrEquip = function(id){
-        initAudio(); const skin = skins.find(s => s.id === id); let walletCoins = parseInt(localStorage.getItem('flappy_total_coins'))||0;
-        if(skin.purchased){currentSkin = skin; playSound(587.33, 0.15, 'square', false);}
-        else if(walletCoins >= skin.price){
-            walletCoins -= skin.price; localStorage.setItem('flappy_total_coins', walletCoins); localStorage.setItem('skin_buy_' + skin.id, true); skin.purchased = true; currentSkin = skin; playSound(880, 0.3, 'square', false);
-        }
-        updateShopUI();
-    }
-
-    function drawPixelRect(x,y,w,h,fillColor,strokeColor="#000"){ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x),Math.floor(y),Math.floor(w),Math.floor(h)); if(strokeColor){ctx.strokeStyle = strokeColor; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x),Math.floor(y),Math.floor(w),Math.floor(h));}}
-
-    function drawPixelBird(bx,by,skinId) {
-        let targetSkin = skins.find(s => s.id === skinId) || skins; let pSize = 2;
-        for(let r = 0; r < birdMapRaw.length; r++){
-            for(let c = 0; c < birdMapRaw[r].length; c++){
-                let pixelChar = birdMapRaw[r][c]; if(pixelChar === "0") continue;
-                let px = bx + (c * pSize), py = by + (r * pSize), color = "#000";
-                if(pixelChar === "1") color = "#000"; else if(pixelChar === "2") color = targetSkin.color; else if(pixelChar === "3") color = (targetSkin.id === 'cyber') ? '#ff007f' : '#fff'; else if(pixelChar === "4") color = targetSkin.beak; else if(pixelChar === "5") color = (targetSkin.id === 'cyber') ? '#00e5ff' : '#fff';
-                ctx.fillStyle = color; ctx.fillRect(Math.floor(px),Math.floor(py),pSize,pSize);
-            }
-        }
-        // УНИКАЛЬНЫЕ ДЕТАЛИ ДЛЯ МИШКИ ФРЕДДИ
-        if(targetSkin.id === 'freddy'){
-            drawPixelRect(bx + 4, by - 4, 6, 6, targetSkin.color, "#000"); // Ушко левое
-            drawPixelRect(bx + 24, by - 4, 6, 6, targetSkin.color, "#000"); // Ушко правое
-            drawPixelRect(bx + 12, by + 24, 10, 4, "#000", null); // Черная бабочка
-            drawPixelRect(bx + 6, by - 6, 22, 4, "#000", null); // Поля шляпы
-            drawPixelRect(bx + 10, by - 16, 14, 10, "#000", null); // Цилиндр
-            drawPixelRect(bx + 10, by - 8, 14, 2, "#d32f2f", null); // Красная лента
-        }
-        if(targetSkin.hat && targetSkin.id !== 'freddy'){
-            drawPixelRect(bx + 8, by - 4, 20, 4, "#000", null);
-            drawPixelRect(bx + 12, by - 14, 12, 10, "#000", null);
-        }
-    }
-
-    function spawnPipe(){if(!isHost && netChannel) return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false});}
-    function resetGame(){bird.y = 150; bird.velocity = 0; pipes = []; score = 0; gameOver = false; recordChecked = false; spawnPipe(); updateShopUI();}
-    function handleJump(){initAudio(); if(gameOver) resetGame(); else {bird.velocity = bird.jump; playSound(440, 0.12, 'square', true);}}
-
-    window.addEventListener("keydown",(e) => {if(e.code === "Space" || e.code === "ArrowUp") handleJump();});
-    canvas.addEventListener("mousedown",() => {handleJump(); canvas.focus();}); canvas.addEventListener("touchstart",(e) => {e.preventDefault(); handleJump();},{passive: false});
-
-    function update(){
-        if (netChannel) {
-            netChannel.postMessage({sender: myPlayerName, type: 'fly', y: bird.y, skin: currentSkin.id});
-            if (isHost && pipes.length > 0) {
-                netChannel.postMessage({sender: myPlayerName, type: 'pipe', pipes: JSON.stringify(pipes)});
-            }
-        }
-        if(gameOver){
-            if(!recordChecked){
-                recordChecked=true; playSound(100, 0.4, 'sawtooth', false); let currentCoins = parseInt(localStorage.getItem('flappy_total_coins'))||0;
-                localStorage.setItem('flappy_total_coins', currentCoins + score); sendHighScoreOnline(score);
-            }return;
-        }
-        bird.velocity += bird.gravity; bird.y += bird.velocity; if((bird.y + bird.h) > canvas.height || bird.y < 0) gameOver = true;
-        if(pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) spawnPipe();
-        pipes.forEach(p => {p.x -= 2; if(!p.passed && (p.x + p.w) < bird.x){score++; p.passed = true; updateShopUI(); playSound(600, 0.08, 'square', false);} if((bird.x + bird.w) > p.x && bird.x < (p.x + p.w) && (bird.y < p.top || (bird.y + bird.h) > (canvas.height - p.bottom))) gameOver = true;});
-        pipes = pipes.filter(p => (p.x + p.w) > 0);
-    }
-
-    function draw(){
-        ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
-        if(enemyBird.active){ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0;}
-        pipes.forEach(p => {
-            drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 2), Math.floor(p.top - 22), 6, 20);
-            let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 2), Math.floor(bTop + 2), 6, 20);
-        });
-        ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width/2 - 12, 50);
-        if(gameOver){
-            ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
-            ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); 
-            ctx.font = "16px 'Courier New'"; ctx.fillText("PRESS JUMP TO RESTART", 100, 270); 
-        }
-    }
-    function loop(){update(); draw(); requestAnimationFrame(loop);}
-    resetGame(); fetchOnlineLeaderboard(); loop();
-}, 200);
-</script>
-</body>
-</html>
+window.buyOrEquip = function (id) {
+initAudio(); const skin = skins.find(s => s.id === id); let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;if (skin.purchased) { currentSkin = skin; playSound(587.33, 0.15, 'square', false); }else if (walletCoins >= skin.price) {walletCoins -= skin.price; localStorage.setItem('flappy_total_coins', walletCoins); localStorage.setItem('skin_buy_' + skin.id, true); skin.purchased = true; currentSkin = skin; playSound(880, 0.3, 'square', false);}updateShopUI();}function drawPixelRect(x, y, w, h, fillColor, strokeColor = "#000") { ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); if (strokeColor) { ctx.strokeStyle = strokeColor; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); } }function drawPixelBird(bx, by, skinId) {let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;for (let r = 0; r < birdMapRaw.length; r++) {for (let c = 0; c < birdMapRaw[r].length; c++) {let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;let px = bx + (c * pSize), py = by + (r * pSize), color = "#000";if (pixelChar === "1") color = "#000"; else if (pixelChar === "2") color = targetSkin.color; else if (pixelChar === "3") color = (targetSkin.id === 'cyber') ? '#ff007f' : '#fff'; else if (pixelChar === "4") color = targetSkin.beak; else if (pixelChar === "5") color = (targetSkin.id === 'cyber') ? '#00e5ff' : '#fff';ctx.fillStyle = color; ctx.fillRect(Math.floor(px), Math.floor(py), pSize, pSize);}}if (targetSkin.id === 'freddy') {drawPixelRect(bx + 4, by - 4, 6, 6, targetSkin.color, "#000");drawPixelRect(bx + 24, by - 4, 6, 6, targetSkin.color, "#000");drawPixelRect(bx + 12, by + 24, 10, 4, "#000", null);drawPixelRect(bx + 6, by - 6, 22, 4, "#000", null);drawPixelRect(bx + 10, by - 16, 14, 10, "#000", null);drawPixelRect(bx + 10, by - 8, 14, 2, "#d32f2f", null);}if (targetSkin.hat && targetSkin.id !== 'freddy') {drawPixelRect(bx + 8, by - 4, 20, 4, "#000", null);drawPixelRect(bx + 12, by - 14, 12, 10, "#000", null);}}function spawnPipe() { if (!isHost && netChannel) return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false}); }function resetGame() { bird.y = 150; bird.velocity = 0; pipes = []; score = 0; gameOver = false; recordChecked = false; spawnPipe(); updateShopUI(); }function handleJump() { initAudio(); if (gameOver) resetGame(); else { bird.velocity = bird.jump; playSound(440, 0.12, 'square', true); } }window.addEventListener("keydown", (e) => { if (e.code === "Space" || e.code === "ArrowUp") handleJump(); });canvas.addEventListener("mousedown", () => { handleJump(); canvas.focus(); }); canvas.addEventListener("touchstart", (e) => { e.preventDefault(); handleJump(); }, {passive: false});function update() {if (netChannel) {netChannel.postMessage({sender: myPlayerName, type: 'fly', y: bird.y, skin: currentSkin.id});if (isHost && pipes.length > 0) {netChannel.postMessage({sender: myPlayerName, type: 'pipe', pipes: JSON.stringify(pipes)});}}if (gameOver) {if (!recordChecked) {recordChecked = true; playSound(100, 0.4, 'sawtooth', false); let currentCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;localStorage.setItem('flappy_total_coins', currentCoins + score); sendHighScoreOnline(score);}return;}bird.velocity += bird.gravity; bird.y += bird.velocity; if ((bird.y + bird.h) > canvas.height || bird.y < 0) gameOver = true;if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) spawnPipe();pipes.forEach(p => { p.x -= 2; if (!p.passed && (p.x + p.w) < bird.x) { score++; p.passed = true; updateShopUI(); playSound(600, 0.08, 'square', false); } if ((bird.x + bird.w) > p.x && bird.x < (p.x + p.w) && (bird.y < p.top || (bird.y + bird.h) > (canvas.height - p.bottom))) gameOver = true; });pipes = pipes.filter(p => (p.x + p.w) > 0);}function draw() {ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }pipes.forEach(p => {drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 2), Math.floor(p.top - 22), 6, 20);let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 2), Math.floor(bTop + 2), 6, 20);});ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);if (gameOver) {ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height);ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220);ctx.font = "16px 'Courier New'"; ctx.fillText("PRESS JUMP TO RESTART", 100, 270);}}function loop() { update(); draw(); requestAnimationFrame(loop); }resetGame(); fetchOnlineLeaderboard(); loop();
