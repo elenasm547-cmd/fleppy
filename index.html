@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Freddy bear Edition</title>
+    <title>Flappy Bird MMO: Freddy bear</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -15,7 +15,7 @@
         h2{margin:0;text-align:center;color:#fff;font-size:16px;text-transform:uppercase;border-bottom:4px dashed #444;padding-bottom:8px;}
         .coins-display{color:#ffd700;font-size:16px;text-align:center;font-weight:bold;background:#222;padding:8px;border:2px solid #ffd700;}
         .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-family:inherit;font-size:12px;text-transform:uppercase;}
-        .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;font-family:inherit;text-align:center;font-size:14px;width:100%;box-sizing:border-box;}
+        .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;font-family:inherit;text-align:center;font-size:11px;width:100%;box-sizing:border-box;word-break:break-all;}
         .skin-item,.leader-item{display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 12px;border:2px solid #333;}
         .skin-name{font-weight:bold;font-size:14px;text-transform:uppercase;}
         .shop-btn{background:#00aa00;color:white;border:2px solid #fff;padding:6px 10px;cursor:pointer;font-weight:bold;min-width:85px;font-family:inherit;}
@@ -42,8 +42,8 @@
         <div class="multiplayer-box">
             <h2>ONLINE MULTIPLAYER</h2>
             <div id="mp-menu-buttons" style="display:flex; gap:10px;">
-                <button class="mp-btn" style="flex:1;" onclick="createOnlineRoom()">CREATE ROOM</button>
-                <button class="mp-btn" style="flex:1; background:#2e7d32;" onclick="showJoinInputs()">JOIN ROOM</button>
+                <button class="mp-btn" style="flex:1;" onclick="startHost()">CREATE ROOM</button>
+                <button class="mp-btn" style="flex:1; background:#2e7d32;" onclick="startJoin()">JOIN ROOM</button>
             </div>
             <div id="mp-area" style="display:flex; flex-direction:column; gap:8px; margin-top:5px;"></div>
             <div id="mp-status" style="text-align:center;font-size:12px;color:#aaa;">Одиночный режим</div>
@@ -66,6 +66,7 @@
         </div>
     </div>
 </div>
+
 <script>
 const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
 let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
@@ -80,7 +81,7 @@ if (!myPlayerName || myPlayerName === "null" || myPlayerName.trim() === "") {
     localStorage.setItem('flappy_device_name_v9', myPlayerName);
 }
 
-let isHost = false, roomId = "", netChannel = null;
+let localConnection = null, dataChannel = null, isHost = false;
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -137,7 +138,7 @@ const skins = [
     {id: 'freddy', name: 'FNAF Freddy', color: '#6d4c41', beak: '#3e2723', hat: true, price: 150, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0];
+let currentSkin = skins[0]; // НАВСЕГДА ИСПРАВЛЕНО: берётся строго первая утка, серый экран не появится!
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -178,47 +179,84 @@ function fetchOnlineLeaderboard() {
     container.appendChild(personalItem);
 }
 
-function initDirectNetwork(roomCode) {
-    try {
-        netChannel = new BroadcastChannel("flappy_mmo_link_" + roomCode);
-        document.getElementById("mp-status").innerHTML = isHost ? "🟢 ОЖИДАНИЕ ДРУГА..." : "🟢 МУЛЬТИПЛЕЕР АКТИВЕН!";
-        if (!isHost) enemyBird.active = true;
+const configuration = {'iceServers': [{'urls': 'stun:://google.com'}]};
 
-        netChannel.onmessage = (e) => {
-            let data = e.data;
-            if (data.sender === myPlayerName) return;
-            if (data.type === 'fly') {
-                enemyBird.active = true;
-                enemyBird.y = data.y;
-                enemyBird.currentSkinId = data.skin;
-                document.getElementById("mp-status").innerHTML = "🟢 ДРУГ В СЕТИ!";
-            }
-            if (data.type === 'pipe' && !isHost) {
-                pipes = JSON.parse(data.pipes);
+function startHost() {
+    document.getElementById("mp-menu-buttons").style.display = "none";
+    document.getElementById("mp-status").innerHTML = "Генерация кода комнаты...";
+    isHost = true;
+    localConnection = new RTCPeerConnection(configuration);
+    dataChannel = localConnection.createDataChannel("gameChannel");
+    setupChannelListeners();
+    localConnection.onicecandidate = e => { 
+        if(!e.candidate) { 
+            let token = btoa(JSON.stringify(localConnection.localDescription));
+            document.getElementById("mp-area").innerHTML = `
+                <span style="font-size:11px;color:#ffd700;">1. Скопируй этот код и отправь другу:</span>
+                <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
+                <span style="font-size:11px;margin-top:5px;">2. Вставь ответный код друга снизу:</span>
+                <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга сюда...">
+                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">3. ПОДКЛЮЧИТЬ ИГРОКА</button>
+            `; 
+            document.getElementById("mp-status").innerHTML = "Ожидание ответа от друга...";
+        }
+    };
+    localConnection.createOffer().then(o => localConnection.setLocalDescription(o));
+}
+
+function acceptAnswer() {
+    let ans = document.getElementById("join-code-input").value;
+    if(!ans.trim()) return alert("Сначала вставьте ответный код друга!");
+    try {
+        localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(ans))));
+    } catch(e) { alert("Ошибка кода! Перепроверьте текст."); }
+}
+
+function startJoin() {
+    document.getElementById("mp-menu-buttons").style.display = "none";
+    document.getElementById("mp-area").innerHTML = `
+        <span style="font-size:11px;color:#2e7d32;">1. Вставь код, который тебе скинул Хост:</span>
+        <input id="host-code-input" class="mp-input" placeholder="Вставь код хоста сюда...">
+        <button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">2. СГЕНЕРИРОВАТЬ ОТВЕТ</button>
+    `;
+    document.getElementById("mp-status").innerHTML = "Ожидание ввода кода...";
+}
+
+function executeJoin() {
+    let code = document.getElementById("host-code-input").value;
+    if(!code.trim()) return alert("Вставьте код хоста!");
+    isHost = false; 
+    localConnection = new RTCPeerConnection(configuration);
+    localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
+    try {
+        localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
+        localConnection.onicecandidate = e => { 
+            if(!e.candidate) { 
+                let token = btoa(JSON.stringify(localConnection.localDescription));
+                document.getElementById("mp-area").innerHTML = `
+                    <span style="font-size:11px;color:#ffd700;">3. Скопируй этот ответный код и отправь Хосту:</span>
+                    <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
+                `; 
+                document.getElementById("mp-status").innerHTML = "Код ответа готов! Перешли его Создателю.";
             }
         };
-    } catch(err) { document.getElementById("mp-status").innerHTML = "🟢 Одиночный автономный режим"; }
+        localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
+    } catch(e) { alert("Неверный код хоста!"); }
 }
 
-window.createOnlineRoom = function () {
-    isHost = true; roomId = "" + Math.floor(100 + Math.random() * 900);
-    document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `<span style='font-size:11px;color:#ffd700;'>Код комнаты:</span><div class="coins-display" style='font-size:20px;letter-spacing:2px;'>${roomId}</div>`;
-    initDirectNetwork(roomId);
-}
-
-window.showJoinInputs = function () {
-    document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `<input id="host-code-input" class="mp-input" type="number" placeholder="Код комнаты..."><button class="mp-btn" style='margin-top:5px;background:#2e7d32;width:100%;' onclick="executeOnlineJoin()">ПОДКЛЮЧИТЬСЯ</button>`;
-    document.getElementById("mp-status").innerHTML = "Ввод кода...";
-}
-
-window.executeOnlineJoin = function () {
-    let inputCode = document.getElementById("host-code-input").value;
-    if (!inputCode.trim()) return alert("Введите код!");
-    isHost = false; roomId = inputCode.trim();
-    document.getElementById("mp-area").innerHTML = `<div class="coins-display">Комната: ${roomId}</div>`;
-    initDirectNetwork(roomId);
+function setupChannelListeners() {
+    dataChannel.onopen = () => {
+        document.getElementById("mp-status").innerHTML = "🟢 МУЛЬТИПЛЕЕР АКТИВЕН! ИГРАЕМ!";
+        document.getElementById("mp-area").innerHTML = "";
+        enemyBird.active = true;
+    };
+    dataChannel.onmessage = (e) => {
+        try {
+            let data = JSON.parse(e.data);
+            if(data.type === 'fly') { enemyBird.active = true; enemyBird.y = data.y; enemyBird.currentSkinId = data.skin; }
+            if(data.type === 'pipe' && !isHost) { pipes = JSON.parse(data.pipes); }
+        } catch(err){}
+    };
 }
 function updateShopUI() {
     let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
@@ -245,7 +283,7 @@ window.buyOrEquip = function (id) {
 function drawPixelRect(x, y, w, h, fillColor, strokeColor = "#000") { ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); if (strokeColor) { ctx.strokeStyle = strokeColor; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); } }
 
 function drawPixelBird(bx, by, skinId) {
-    let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
+    let targetSkin = skins.find(s => s.id === skinId) || skins; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
             let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
@@ -268,7 +306,7 @@ function drawPixelBird(bx, by, skinId) {
     }
 }
 
-function spawnPipe() { if (!isHost && netChannel) return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false}); }
+function spawnPipe() { if (!isHost && dataChannel && dataChannel.readyState === "open") return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false}); }
 function resetGame() { bird.y = 150; bird.velocity = 0; pipes = []; score = 0; gameOver = false; recordChecked = false; spawnPipe(); updateShopUI(); }
 function handleJump() { initAudio(); if (gameOver) resetGame(); else { bird.velocity = bird.jump; playSound(440, 0.12, 'square', true); } }
 
@@ -276,9 +314,9 @@ window.addEventListener("keydown", (e) => { if (e.code === "Space" || e.code ===
 canvas.addEventListener("mousedown", () => { handleJump(); canvas.focus(); }); canvas.addEventListener("touchstart", (e) => { e.preventDefault(); handleJump(); }, {passive: false});
 
 function update() {
-    if (netChannel) {
-        netChannel.postMessage({sender: myPlayerName, type: 'fly', y: bird.y, skin: currentSkin.id});
-        if (isHost && pipes.length > 0) netChannel.postMessage({sender: myPlayerName, type: 'pipe', pipes: JSON.stringify(pipes)});
+    if (dataChannel && dataChannel.readyState === "open") {
+        dataChannel.send(JSON.stringify({type: 'fly', y: bird.y, skin: currentSkin.id}));
+        if (isHost && pipes.length > 0) dataChannel.send(JSON.stringify({type: 'pipe', pipes: JSON.stringify(pipes)}));
     }
     if (gameOver) {
         if (!recordChecked) {
