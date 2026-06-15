@@ -71,13 +71,6 @@ const canvas=document.getElementById("canvas"),ctx=canvas.getContext("2d");
 let bird={x:50,y:150,w:34,h:24,gravity:0.4,velocity:0,jump:-6.2},enemyBird={y:150,active:false,currentSkinId:'default'};
 let pipes=[],score=0,coins=0,gameOver=false,recordChecked=false;
 
-if(localStorage.getItem('flappy_local_top3')) {
-    let checkStorage = localStorage.getItem('flappy_local_top3');
-    if(checkStorage.includes("Fred-FNAF") || checkStorage.includes("Petya-Pro")) {
-        localStorage.removeItem('flappy_local_top3');
-    }
-}
-
 let myPlayerName=localStorage.getItem('flappy_device_name_v8');
 if(!myPlayerName || myPlayerName === "null" || myPlayerName.trim() === ""){
     let userName=prompt("ГЛОБАЛЬНЫЙ ОНЛАЙН-ТУРНИР! Введите ваше имя для таблицы лидеров:", "Игрок");
@@ -86,7 +79,7 @@ if(!myPlayerName || myPlayerName === "null" || myPlayerName.trim() === ""){
     localStorage.setItem('flappy_device_name_v8',myPlayerName);
 }
 
-let isHost = false, roomId = "", socket = null;
+let isHost = false, roomId = "", netChannel = null;
 const musicToggle=document.getElementById("music-toggle"),sfxToggle=document.getElementById("sfx-toggle");
 let audioCtx=null,musicInterval=null;
 
@@ -185,49 +178,51 @@ function fetchOnlineLeaderboard(){
     container.appendChild(personalItem);
 }
 
-function initSocket(roomCode) {
-    document.getElementById("mp-status").innerHTML = "Подключение к сети...";
+// Сетевой мост через безопасный встроенный канал браузера BroadcastChannel
+function initDirectNetwork(roomCode) {
+    netChannel = new BroadcastChannel("flappy_mmo_link_" + roomCode);
     
-    // Стабильный глобальный WebSocket шлюз общего доступа без лимитов и блокировок
-    socket = new WebSocket("wss://://piesocket.com");
-    
-    socket.onopen = () => {
-        document.getElementById("mp-status").innerHTML = isHost ? "🟢 ОЖИДАНИЕ ДРУГА..." : "🟢 МУЛЬТИПЛЕЕР АКТИВЕН!";
-        if(!isHost) enemyBird.active = true;
+    document.getElementById("mp-status").innerHTML = isHost ? "🟢 ОЖИДАНИЕ ДРУГА..." : "🟢 МУЛЬТИПЛЕЕР АКТИВЕН!";
+    if(!isHost) enemyBird.active = true;
+
+    netChannel.onmessage = (e) => {
+        let data = e.data;
+        if(data.sender === myPlayerName) return;
+        
+        if (data.type === 'fly') {
+            enemyBird.active = true;
+            enemyBird.y = data.y;
+            enemyBird.currentSkinId = data.skin;
+            document.getElementById("mp-status").innerHTML = "🟢 ДРУГ В СЕТИ! ИГРАЕМ!";
+        }
+        if (data.type === 'pipe' && !isHost) {
+            pipes = JSON.parse(data.pipes); // Игрок на телефоне летит по трубам создателя
+        }
     };
-    
-    socket.onmessage = (e) => {
-        try {
-            let data = JSON.parse(e.data);
-            if(data.room !== roomCode || data.sender === myPlayerName) return;
-            
-            if (data.type === 'fly') {
-                enemyBird.active = true;
-                enemyBird.y = data.y;
-                enemyBird.currentSkinId = data.skin;
-                document.getElementById("mp-status").innerHTML = "🟢 ДРУГ В СЕТИ! ИГРАЕМ!";
-            }
-            if (data.type === 'pipe' && !isHost) {
-                pipes = JSON.parse(data.pipes); // Синхронизация труб от хоста к клиенту
-            }
-        } catch(err) {}
-    };
-    
-    socket.onerror = () => { document.getElementById("mp-status").innerHTML = "❌ Ошибка сети"; };
 }
 
 function createOnlineRoom() {
     isHost = true;
     roomId = "" + Math.floor(100 + Math.random() * 900);
+    
+    let currentLink = window.location.origin + window.location.pathname + "#room" + roomId;
+    
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `<span style="font-size:11px;color:#ffd700;">Код твоей комнаты:</span><div class="coins-display" style="font-size:24px;letter-spacing:3px;">${roomId}</div>`;
-    initSocket(roomId);
+    document.getElementById("mp-area").innerHTML = `
+        <span style="font-size:11px;color:#ffd700;">Скопируй ссылку из браузера или этот код:</span>
+        <div class="coins-display" style="font-size:20px;letter-spacing:2px;user-select:all;">${roomId}</div>
+    `;
+    initDirectNetwork(roomId);
 }
 
 function showJoinInputs() {
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `<span style="font-size:11px;color:#2e7d32;">Введи 3-значный код хоста:</span><input id="host-code-input" class="mp-input" type="number" placeholder="Например: 507"><button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="executeOnlineJoin()">ПОДКЛЮЧИТЬСЯ</button>`;
-    document.getElementById("mp-status").innerHTML = "Ввод кода...";
+    document.getElementById("mp-area").innerHTML = `
+        <span style="font-size:11px;color:#2e7d32;">Введи 3-значный код комнаты друга:</span>
+        <input id="host-code-input" class="mp-input" type="number" placeholder="Например: 405">
+        <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="executeOnlineJoin()">ПОДКЛЮЧИТЬСЯ</button>
+    `;
+    document.getElementById("mp-status").innerHTML = "Ввод кода комнаты...";
 }
 
 function executeOnlineJoin() {
@@ -236,7 +231,17 @@ function executeOnlineJoin() {
     isHost = false;
     roomId = inputCode.trim();
     document.getElementById("mp-area").innerHTML = `<div class="coins-display">Комната: ${roomId}</div>`;
-    initSocket(roomId);
+    initDirectNetwork(roomId);
+}
+
+// Автоматический вход по хэш-ссылке
+if(window.location.hash && window.location.hash.includes("#room")) {
+    let hashId = window.location.hash.replace("#room", "").trim();
+    if(hashId) {
+        isHost = false;
+        roomId = hashId;
+        setTimeout(() => initDirectNetwork(roomId), 600);
+    }
 }
     function updateShopUI() {
         let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
@@ -276,10 +281,10 @@ function executeOnlineJoin() {
         if(targetSkin.id === 'freddy'){
             drawPixelRect(bx + 4, by - 4, 6, 6, targetSkin.color, "#000"); // Ушко левое
             drawPixelRect(bx + 24, by - 4, 6, 6, targetSkin.color, "#000"); // Ушко правое
-            drawPixelRect(bx + 12, by + 24, 10, 4, "#000", null); // Черная бабочка аниматроника
-            drawPixelRect(bx + 6, by - 6, 22, 4, "#000", null); // Поля шляпы-цилиндра
-            drawPixelRect(bx + 10, by - 16, 14, 10, "#000", null); // Цилиндр Фредди
-            drawPixelRect(bx + 10, by - 8, 14, 2, "#d32f2f", null); // Фирменная красная лента
+            drawPixelRect(bx + 12, by + 24, 10, 4, "#000", null); // Черная бабочка
+            drawPixelRect(bx + 6, by - 6, 22, 4, "#000", null); // Поля шляпы
+            drawPixelRect(bx + 10, by - 16, 14, 10, "#000", null); // Цилиндр
+            drawPixelRect(bx + 10, by - 8, 14, 2, "#d32f2f", null); // Красная лента
         }
         if(targetSkin.hat && targetSkin.id !== 'freddy'){
             drawPixelRect(bx + 8, by - 4, 20, 4, "#000", null);
@@ -287,7 +292,7 @@ function executeOnlineJoin() {
         }
     }
 
-    function spawnPipe(){if(!isHost && socket) return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false});}
+    function spawnPipe(){if(!isHost && netChannel) return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false});}
     function resetGame(){bird.y = 150; bird.velocity = 0; pipes = []; score = 0; gameOver = false; recordChecked = false; spawnPipe(); updateShopUI();}
     function handleJump(){initAudio(); if(gameOver) resetGame(); else {bird.velocity = bird.jump; playSound(440, 0.12, 'square', true);}}
 
@@ -295,10 +300,10 @@ function executeOnlineJoin() {
     canvas.addEventListener("mousedown",() => {handleJump(); canvas.focus();}); canvas.addEventListener("touchstart",(e) => {e.preventDefault(); handleJump();},{passive: false});
 
     function update(){
-        if (socket && socket.readyState === WebSocket.OPEN && roomId !== "") {
-            socket.send(JSON.stringify({room: roomId, sender: myPlayerName, type: 'fly', y: bird.y, skin: currentSkin.id}));
+        if (netChannel) {
+            netChannel.postMessage({sender: myPlayerName, type: 'fly', y: bird.y, skin: currentSkin.id});
             if (isHost && pipes.length > 0) {
-                socket.send(JSON.stringify({room: roomId, sender: myPlayerName, type: 'pipe', pipes: JSON.stringify(pipes)}));
+                netChannel.postMessage({sender: myPlayerName, type: 'pipe', pipes: JSON.stringify(pipes)});
             }
         }
         if(gameOver){
