@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird: Attack Freddy</title>
+    <title>Flappy Bird MMO: Attack Freddy</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -31,11 +31,11 @@
         <div class="multiplayer-box">
             <h2>ONLINE MULTIPLAYER</h2>
             <div id="mp-menu-buttons" style="display:flex; gap:10px;">
-                <button class="mp-btn" style="flex:1; background:#555; cursor:not-allowed;" disabled>CREATE ROOM</button>
-                <button class="mp-btn" style="flex:1; background:#555; cursor:not-allowed;" disabled>JOIN ROOM</button>
+                <button class="mp-btn" style="flex:1;" onclick="startHost()">CREATE ROOM</button>
+                <button class="mp-btn" style="flex:1; background:#2e7d32;" onclick="startJoin()">JOIN ROOM</button>
             </div>
             <div id="mp-area" style="display:flex; flex-direction:column; gap:8px; margin-top:5px;"></div>
-            <div id="mp-status" style="text-align:center;font-size:12px;color:#ff5555;">Мультиплеер временно отключен на тех. работы</div>
+            <div id="mp-status" style="text-align:center;font-size:12px;color:#aaa;">Одиночный режим</div>
         </div>
         <div class="shop"> 
             <h2>SHOP</h2> 
@@ -87,7 +87,7 @@ function playSound(freq, duration, type = 'sine', ramp = true) {
         let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
         osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
         if (ramp) osc.frequency.exponentialRampToValueAtTime(freq / 2, audioCtx.currentTime + duration);
-        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.01, duration);
+        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + duration);
         osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
     } catch (e) {}
 }
@@ -107,6 +107,8 @@ function startAmbientMusic() {
     }, 1000);
 }
 
+function getSkyColor() { return "rgb(112, 197, 206)"; }
+
 const birdMapRaw = ["00000111111000000", "00001222222110000", "00112222221331000", "01225522213113100", "12222552213113100", "12222222221331000", "12222222222111100", "1222222224444410", "0122222241111410", "0011222441114100", "0000114444441000", "0000001111110000"];
 
 const skins = [
@@ -116,7 +118,8 @@ const skins = [
     {id: 'freddy', name: 'Attack Freddy', color: '#6d4c41', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins;
+// ЖЁСТКОЕ ИСПРАВЛЕНИЕ: строго один объект (уточка) при старте, чтобы холст прорисовывался!
+let currentSkin = skins[0];
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -126,27 +129,21 @@ function sendHighScoreOnline(finalScore) {
         localStorage.setItem('flappy_personal_best', personalBest);
     }
     let existing = localLeaderboard.find(p => p.name === myPlayerName);
-    if (existing) {
-        if (finalScore > existing.score) existing.score = finalScore;
-    } else {
-        localLeaderboard.push({name: myPlayerName, score: finalScore});
-    }
+    if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
+    else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
     fetchOnlineLeaderboard();
 }
 
 function fetchOnlineLeaderboard() {
-    const container = document.getElementById("leader-items");
-    if (!container) return; container.innerHTML = "";
+    const container = document.getElementById("leader-items"); if (!container) return; container.innerHTML = "";
     localLeaderboard.sort((a, b) => parseInt(b.score) - parseInt(a.score));
     localLeaderboard = localLeaderboard.slice(0, 3);
     localStorage.setItem('flappy_local_top4', JSON.stringify(localLeaderboard));
-
-    if (localLeaderboard.length === 0) {
-        container.innerHTML = "<div style='text-align:center;color:#666;padding:5px 0;'>НЕТ РЕКОРДОВ</div>";
-    } else {
+    if (localLeaderboard.length === 0) { container.innerHTML = "<div style='text-align:center;color:#666;'>НЕТ РЕКОРДОВ</div>"; } 
+    else {
         localLeaderboard.forEach((player, index) => {
             const item = document.createElement("div"); item.className = "leader-item";
-            item.innerHTML = `<span class="place-${index + 1}">#${index + 1} ${player.name}</span><span style='font-weight:bold'>${player.score}</span>`;
+            item.innerHTML = `<span>#${index + 1} ${player.name}</span><span style='font-weight:bold'>${player.score}</span>`;
             container.appendChild(item);
         });
     }
@@ -158,70 +155,60 @@ function fetchOnlineLeaderboard() {
 
 const configuration = {'iceServers': [{'urls': 'stun:://google.com'}]};
 
-function startHost() {
+window.startHost = function() {
+    if (window.location.protocol === 'file:') {
+        return alert("Локальный запуск! Для игры по сети загрузите этот index.html на GitHub Pages.");
+    }
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-status").innerHTML = "Генерация кода комнаты...";
-    isHost = true;
+    document.getElementById("mp-status").innerHTML = "Генерация кода комнаты..."; isHost = true;
     localConnection = new RTCPeerConnection(configuration);
-    dataChannel = localConnection.createDataChannel("gameChannel");
-    setupChannelListeners();
-    localConnection.onicecandidate = e => { 
-        if(!e.candidate) { 
-            let token = btoa(JSON.stringify(localConnection.localDescription));
-            document.getElementById("mp-area").innerHTML = `
-                <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
-                <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга...">
-                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>
-            `; 
-            document.getElementById("mp-status").innerHTML = "Ожидание ответа от друга...";
-        }
-    };
+    dataChannel = localConnection.createDataChannel("gameChannel"); setupChannelListeners();
+    
+    let iceTimeout = setTimeout(() => { triggerTokenDisplay(); }, 3000);
+    localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(iceTimeout); triggerTokenDisplay(); } };
     localConnection.createOffer().then(o => localConnection.setLocalDescription(o));
 }
 
-function acceptAnswer() {
-    let ans = document.getElementById("join-code-input").value;
-    if(!ans.trim()) return alert("Вставь ответный код!");
-    try {
-        localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(ans))));
-    } catch(e) { alert("Ошибка кода!"); }
+function triggerTokenDisplay() {
+    let token = btoa(JSON.stringify(localConnection.localDescription));
+    document.getElementById("mp-area").innerHTML = `<input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly><input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга..."><button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>`;
+    document.getElementById("mp-status").innerHTML = "Ожидание ответа от друга...";
 }
 
-function startJoin() {
+window.acceptAnswer = function() {
+    let ans = document.getElementById("join-code-input").value; if(!ans.trim()) return alert("Вставь ответный код!");
+    try { localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(ans)))); } catch(e) { alert("Ошибка кода!"); }
+}
+
+window.startJoin = function() {
+    if (window.location.protocol === 'file:') {
+        return alert("Локальный запуск! Для игры по сети загрузите этот index.html на GitHub Pages.");
+    }
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `
-        <input id="host-code-input" class="mp-input" placeholder="Вставь код хоста...">
-        <button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>
-    `;
+    document.getElementById("mp-area").innerHTML = `<input id="host-code-input" class="mp-input" placeholder="Вставь код хоста..."><button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>`;
     document.getElementById("mp-status").innerHTML = "Ввод кода...";
 }
 
-function executeJoin() {
-    let code = document.getElementById("host-code-input").value;
-    if(!code.trim()) return alert("Вставь код!");
-    isHost = false; 
+window.executeJoin = function() {
+    let code = document.getElementById("host-code-input").value; if(!code.trim()) return alert("Вставь код!"); isHost = false;
     localConnection = new RTCPeerConnection(configuration);
     localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
     try {
         localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
-        localConnection.onicecandidate = e => { 
-            if(!e.candidate) { 
-                let token = btoa(JSON.stringify(localConnection.localDescription));
-                document.getElementById("mp-area").innerHTML = `
-                    <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
-                `; 
-                document.getElementById("mp-status").innerHTML = "Код ответа готов! Перешли его Создателю.";
-            }
-        };
+        let iceTimeout = setTimeout(() => { triggerJoinTokenDisplay(); }, 3000);
+        localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(iceTimeout); triggerJoinTokenDisplay(); } };
         localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
     } catch(e) { alert("Неверный код!"); }
 }
 
+function triggerJoinTokenDisplay() {
+    let token = btoa(JSON.stringify(localConnection.localDescription));
+    document.getElementById("mp-area").innerHTML = `<input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>`;
+    document.getElementById("mp-status").innerHTML = "Код ответа готов! Перешли его Создателю.";
+}
+
 function setupChannelListeners() {
-    dataChannel.onopen = () => {
-        document.getElementById("mp-status").innerHTML = "🟢 МУЛЬТИПЛЕЕР АКТИВЕН!";
-        enemyBird.active = true;
-    };
+    dataChannel.onopen = () => { document.getElementById("mp-status").innerHTML = "🟢 МУЛЬТИПЛЕЕР АКТИВЕН!"; enemyBird.active = true; };
     dataChannel.onmessage = (e) => {
         try {
             let data = JSON.parse(e.data);
@@ -252,38 +239,31 @@ window.buyOrEquip = function (id) {
     updateShopUI();
 }
 
-function drawPixelRect(x, y, w, h, fillColor) { ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); }
+function drawPixelRect(x, y, w, h, fillColor) { 
+    ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
+}
 
 function drawPixelBird(bx, by, skinId) {
-    let targetSkin = skins.find(s => s.id === skinId) || skins; let pSize = 2;
+    let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
             let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
             let px = bx + (c * pSize), py = by + (r * pSize), color = "#000";
-            if (pixelChar === "1") color = "#000"; else if (pixelChar === "2") color = targetSkin.color; else if (pixelChar === "3") color = (targetSkin.id === 'cyber') ? '#ff007f' : '#fff'; else if (pixelChar === "4") color = targetSkin.beak; else if (pixelChar === "5") color = (targetSkin.id === 'cyber') ? '#00e5ff' : '#fff';
+            if (pixelChar === "1") color = "#000"; else if (pixelChar === "2") color = targetSkin.color; else if (pixelChar === "3") color = '#fff'; else if (pixelChar === "4") color = targetSkin.beak; else if (pixelChar === "5") color = '#fff';
             ctx.fillStyle = color; ctx.fillRect(Math.floor(px), Math.floor(py), pSize, pSize);
         }
     }
-    // ФАНАТСКИЙ СПРАЙТ: МИШКА ФРЕДДИ СМОТРИТ НАПРАВО (В СТОРОНУ ПОЛЁТА)
     if (targetSkin.id === 'freddy') {
-        // Очищаем клюв птицы коричневым пикселем
         ctx.fillStyle = targetSkin.color; ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 12), 8, 8);
-        // Ушки аниматроника (развёрнуты)
         drawPixelRect(bx + 2, by - 6, 6, 6, "#4e342e"); drawPixelRect(bx + 4, by - 4, 2, 2, "#8d6e63"); 
         drawPixelRect(bx + 24, by - 6, 6, 6, "#4e342e"); drawPixelRect(bx + 26, by - 4, 2, 2, "#8d6e63"); 
-        // Объёмный цилиндр со смещением вправо
-        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by - 10), 24, 4); 
-        ctx.fillRect(Math.floor(bx + 10), Math.floor(by - 22), 16, 12); 
+        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by - 10), 24, 4); ctx.fillRect(Math.floor(bx + 10), Math.floor(by - 22), 16, 12); 
         ctx.fillStyle = "#d32f2f"; ctx.fillRect(Math.floor(bx + 10), Math.floor(by - 14), 16, 4); 
-        // Чёрные глазницы FNAF и светящиеся белые точки (смотрят направо)
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 12), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
         ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 15), Math.floor(by + 6), 2, 2); ctx.fillRect(Math.floor(bx + 27), Math.floor(by + 6), 2, 2);
-        // Выступающая вправо светлая морда и чёрный нос аниматроника
         drawPixelRect(bx + 14, by + 12, 16, 8, "#d7ccc8"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 12), 4, 3);
-        // Открытая массивная нижняя челюсть "Attack Mode"
-        drawPixelRect(bx + 14, by + 20, 12, 4, "#4e342e"); 
-        // Чёрный галстук-бабочка
-        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 10), Math.floor(by + 26), 10, 4);
+        drawPixelRect(bx + 14, by + 20, 12, 4, "#4e342e"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 10), Math.floor(by + 26), 10, 4);
     }
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 4), 20, 4); ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 14), 12, 10);
@@ -298,7 +278,6 @@ window.addEventListener("keydown", (e) => { if (e.code === "Space" || e.code ===
 canvas.addEventListener("mousedown", () => { handleJump(); canvas.focus(); }); canvas.addEventListener("touchstart", (e) => { e.preventDefault(); handleJump(); }, {passive: false});
 
 function update() {
-    // ЖЕСТКАЯ ФИКСАЦИЯ БАГА: Проверка "open" спасает от серого экрана во время коннекта
     if (dataChannel && dataChannel.readyState === "open") {
         dataChannel.send(JSON.stringify({type: 'fly', y: bird.y, skin: currentSkin.id}));
         if (isHost && pipes.length > 0) dataChannel.send(JSON.stringify({type: 'pipe', pipes: JSON.stringify(pipes)}));
@@ -318,13 +297,17 @@ function update() {
 function draw() {
     ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
     if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }
-    pipes.forEach(p => { drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); });
+    pipes.forEach(p => { 
+        drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), 0, 2, Math.floor(p.top));
+        drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 2, 20);
+        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));
+        drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);
+    });
     ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);
     if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }
 }
 function loop() { update(); draw(); requestAnimationFrame(loop); }
-currentSkin = skins[0]; resetGame(); fetchOnlineLeaderboard(); loop();
-}, 200);
+currentSkin = skins[0]; resetGame(); loop();
 </script>
 </body>
 </html>
