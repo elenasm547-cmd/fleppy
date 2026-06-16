@@ -25,7 +25,6 @@
         #rooms-list{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:5px;border:2px solid #333;}
         @media(max-width:768px){.container{flex-direction:column;align-items:center;}canvas,.side-panel{width:100%;max-width:400px;}}
     </style>
-    <!-- ПОДКЛЮЧАЕМ ДЕЦЕНТРАЛИЗОВАННЫЙ СЕТЕВОЙ ПРОТОКОЛ GUN -->
     <script src="https://jsdelivr.net"></script>
 </head>
 <body>
@@ -63,7 +62,6 @@ let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
 let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
-// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН
 let myPlayerName = localStorage.getItem('flappy_device_name_v9');
 if (!myPlayerName) {
     let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
@@ -72,7 +70,6 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v9', myPlayerName);
 }
 
-// ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ GUN (БЕЗБЛОКИРОВОЧНЫЙ СЕРВЕР)
 const gun = Gun(['https://herokuapp.com']);
 const lobbyNode = gun.get('flappy_mmo_global_lobby_2026');
 
@@ -86,7 +83,6 @@ function initAudio() {
     if (audioCtx && !musicInterval) startAmbientMusic();
 }
 
-// ИСПРАВЛЕНО: Громкие сочные прыжки благодаря фиксу currentTime!
 function playSound(freq, duration, type = 'sine', ramp = true) {
     if (!sfxToggle.checked) return;
     if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
@@ -127,10 +123,9 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0]; // Жёсткое закрепление одиночного объекта, серый экран побежден!
+let currentSkin = skins[0]; // Жесткая фиксация объекта!
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
-// СЕТЕВАЯ ЛОГИКА: ОБНОВЛЕНИЕ ЖИВОГО СПИСКА ЛОББИ И ИГРОКОВ ОНЛАЙН
 function sendHighScoreOnline(finalScore) {
     if (finalScore <= 0) return;
     if (finalScore > personalBest) { personalBest = finalScore; localStorage.setItem('flappy_personal_best', personalBest); }
@@ -155,7 +150,6 @@ function fetchOnlineLeaderboard() {
     }
 }
 
-// СЕРВЕРНЫЙ ЦИКЛ ОБМЕНА КООРДИНАТАМИ ЧЕРЕЗ GUN (БЕЗ WEBRTC ЗАВИСАНИЙ)
 window.createNewServerRoom = function() {
     initAudio(); isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
     document.getElementById("host-btn").style.display = "none";
@@ -170,18 +164,14 @@ window.joinServerRoom = function(roomId) {
     enemyBird.active = true;
 }
 
-// ПОЛУЧЕНИЕ И ОБНОВЛЕНИЕ СПИСКА АКТИВНЫХ ЛОББИ НА ЭКРАНЕ
 setInterval(() => {
-    if (lobbyNode && myPlayerName) {
-        lobbyNode.get('online_users').get(myPlayerName).put(Date.now());
-    }
+    if (lobbyNode && myPlayerName) { lobbyNode.get('online_users').get(myPlayerName).put(Date.now()); }
 }, 4000);
 
 lobbyNode.map().on((data, id) => {
     if (!data) return;
     const container = document.getElementById("rooms-list"); if (!container) return;
     
-    // Если это данные о живых юзерах на сайте
     if (id === 'online_users') {
         let now = Date.now();
         Object.keys(data).forEach(user => {
@@ -196,7 +186,6 @@ lobbyNode.map().on((data, id) => {
         return;
     }
     
-    // Если это игровая комната в лобби
     if (id.startsWith("room_") && Date.now() - data.lastActive < 10000) {
         if (document.getElementById(id)) return;
         let div = document.createElement("div"); div.id = id; div.className = "room-item";
@@ -205,7 +194,6 @@ lobbyNode.map().on((data, id) => {
     }
 });
 
-// МОНИТОРИНГ ИГРОВОГО СЕАНСА НАПРАМУЮ С СЕРВЕРА СЕТИ
 setInterval(() => {
     if (!myRoomId) return;
     if (isHost) {
@@ -216,7 +204,6 @@ setInterval(() => {
         lobbyNode.get(myRoomId).on(data => { if(data) { enemyBird.y = data.enemyY; enemyBird.currentSkinId = data.enemySkin; if (data.pipes) pipes = JSON.parse(data.pipes); } });
     }
 }, 40);
-
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
@@ -274,10 +261,22 @@ function update() {
 }
 
 function draw() {
-    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
+    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin[0].id);
     if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }
     
     pipes.forEach(p => { 
         drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), 0, 2, Math.floor(p.top));
         drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 2, 20);
-let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);});ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }}function loop() { update(); draw(); requestAnimationFrame(loop); }currentSkin = skins[0]; resetGame(); loop();window.addEventListener("load", () => { updateShopUI(); });
+        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));
+        drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);
+    });
+
+    ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);
+    if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }
+}
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+currentSkin = skins[0]; resetGame(); loop();
+window.addEventListener("load", () => { updateShopUI(); });
+</script>
+</body>
+</html>
