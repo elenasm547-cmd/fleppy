@@ -25,9 +25,6 @@
         #rooms-list{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:5px;border:2px solid #333;}
         @media(max-width:768px){.container{flex-direction:column;align-items:center;}canvas,.side-panel{width:100%;max-width:400px;}}
     </style>
-    <!-- ПОДКЛЮЧАЕМ НАДЁЖНЫЕ ОБЛАЧНЫЕ СКРИПТЫ GOOGLE FIREBASE -->
-    <script src="https://gstatic.com"></script>
-    <script src="https://gstatic.com"></script>
 </head>
 <body>
 <div class="container"> 
@@ -64,7 +61,7 @@ let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
 let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
-// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН В FIREBASE
+// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА
 let myPlayerName = localStorage.getItem('flappy_device_name_v10');
 if (!myPlayerName) {
     let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ FIREBASE LOBBY! Введите ваш ник:", "Игрок");
@@ -73,14 +70,7 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v10', myPlayerName);
 }
 
-// ОФИЦИАЛЬНОЕ БЕСПЛАТНОЕ ОБЛАЧНОЕ ПОДКЛЮЧЕНИЕ К СЕРВЕРАМ GOOGLE FIREBASE
-const firebaseConfig = { databaseURL: "https://firebaseio.com" };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const lobbyRef = db.ref('flappy_mmo_lobby');
-const onlineRef = db.ref('flappy_mmo_online');
-
-let isHost = false, myRoomId = "";
+let isHost = false, myRoomId = "", db = null, lobbyRef = null, onlineRef = null;
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -130,7 +120,8 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0]; // МАКСИМАЛЬНАЯ ФИКСАЦИЯ: строго первый объект утки
+// ЖЁСТКИЙ ИСПРАВЛЕННЫЙ БЛОК: Вытаскиваем строго один объект, а не весь массив
+let currentSkin = skins[0]; 
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -157,77 +148,79 @@ function fetchOnlineLeaderboard() {
     }
 }
 
-// РАБОТА С СЕРВЕРОМ GOOGLE FIREBASE
 window.createNewServerRoom = function() {
-    initAudio(); isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
+    initAudio(); if (!db) return alert("Сеть ещё подключается, подождите секунду...");
+    isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     lobbyRef.child(myRoomId).set({ hostName: myPlayerName, pipes: "", enemyY: 150, enemySkin: currentSkin.id, lastActive: firebase.database.ServerValue.TIMESTAMP });
 }
 
 window.joinServerRoom = function(roomId) {
-    initAudio(); isHost = false; myRoomId = roomId;
+    initAudio(); if (!db) return;
+    isHost = false; myRoomId = roomId;
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ПОДКЛЮЧЕН К ИГРОКУ!";
     enemyBird.active = true;
 }
 
-// Регистрация «пульса» игрока на сайте каждые 3 секунды
-const userStatusRef = onlineRef.child(myPlayerName);
-setInterval(() => { userStatusRef.set(firebase.database.ServerValue.TIMESTAMP); }, 3000);
-userStatusRef.onDisconnect().remove();
+function initFirebase() {
+    if (typeof firebase === "undefined") return;
+    const firebaseConfig = { databaseURL: "https://firebaseio.com" };
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database(); lobbyRef = db.ref('flappy_mmo_lobby'); onlineRef = db.ref('flappy_mmo_online');
+    
+    const userStatusRef = onlineRef.child(myPlayerName);
+    setInterval(() => { if (db) userStatusRef.set(firebase.database.ServerValue.TIMESTAMP); }, 3000);
+    userStatusRef.onDisconnect().remove();
 
-// ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ЛОББИ В РЕАЛЬНОМ ВРЕМЕНИ
-setInterval(() => {
-    const container = document.getElementById("rooms-list"); if (!container) return;
-    container.innerHTML = ""; let now = Date.now();
+    setInterval(() => {
+        const container = document.getElementById("rooms-list"); if (!container) return;
+        container.innerHTML = ""; let now = Date.now();
+        onlineRef.once('value', snapshot => {
+            let data = snapshot.val(); if (!data) return;
+            Object.keys(data).forEach(user => {
+                if (now - data[user] < 8000) {
+                    let div = document.createElement("div"); div.className = "room-item";
+                    div.innerHTML = `<span style="color:#00ff00">● ${user}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
+                    container.appendChild(div);
+                }
+            });
+        });
+        lobbyRef.once('value', snapshot => {
+            let data = snapshot.val(); if (!data) return;
+            Object.keys(data).forEach(id => {
+                if (now - data[id].lastActive < 8000) {
+                    let div = document.createElement("div"); div.className = "room-item";
+                    div.innerHTML = `<span>🎮 Лобби: ${data[id].hostName}</span><button class="join-btn" onclick="joinServerRoom('${id}')">JOIN</button>`;
+                    container.appendChild(div);
+                } else { lobbyRef.child(id).remove(); }
+            });
+        });
+    }, 2000);
 
-    // 1. Рендерим игроков онлайн
-    onlineRef.once('value', (snapshot) => {
-        let data = snapshot.val(); if (!data) return;
-        Object.keys(data).forEach(user => {
-            if (now - data[user] < 8000) {
-                let div = document.createElement("div"); div.className = "room-item";
-                div.innerHTML = `<span style="color:#00ff00">● ${user}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
-                container.appendChild(div);
-            }
-        });
-    });
-
-    // 2. Рендерим комнаты
-    lobbyRef.once('value', (snapshot) => {
-        let data = snapshot.val(); if (!data) return;
-        Object.keys(data).forEach(id => {
-            if (now - data[id].lastActive < 8000) {
-                let div = document.createElement("div"); div.className = "room-item";
-                div.innerHTML = `<span>🎮 Лобби: ${data[id].hostName}</span><button class="join-btn" onclick="joinServerRoom('${id}')">JOIN</button>`;
-                container.appendChild(div);
-            } else { lobbyRef.child(id).remove(); }
-        });
-    });
-}, 2000);
-
-// ПОТОК СИНХРОНИЗАЦИИ КООРДИНАТ ДУЭЛИ
-setInterval(() => {
-    if (!myRoomId) return;
-    if (isHost) {
-        lobbyRef.child(myRoomId).update({ enemyY: bird.y, enemySkin: currentSkin.id, pipes: JSON.stringify(pipes), lastActive: firebase.database.ServerValue.TIMESTAMP });
-        lobbyRef.child(myRoomId).child('guestData').once('value', snapshot => {
-            let data = snapshot.val(); if(data) { enemyBird.active = true; enemyBird.y = data.y; enemyBird.currentSkinId = data.skin; }
-        });
-    } else {
-        lobbyRef.child(myRoomId).child('guestData').set({ y: bird.y, skin: currentSkin.id });
-        lobbyRef.child(myRoomId).once('value', snapshot => {
-            let data = snapshot.val(); if(data) { enemyBird.y = data.enemyY; enemyBird.currentSkinId = data.enemySkin; if (data.pipes) pipes = JSON.parse(data.pipes); }
-        });
-    }
-}, 45);
+    setInterval(() => {
+        if (!myRoomId || !db) return;
+        if (isHost) {
+            lobbyRef.child(myRoomId).update({ enemyY: bird.y, enemySkin: currentSkin.id, pipes: JSON.stringify(pipes), lastActive: firebase.database.ServerValue.TIMESTAMP });
+            lobbyRef.child(myRoomId).child('guestData').once('value', snap => {
+                let d = snap.val(); if(d) { enemyBird.active = true; enemyBird.y = d.y; enemyBird.currentSkinId = d.skin; }
+            });
+        } else {
+            lobbyRef.child(myRoomId).child('guestData').set({ y: bird.y, skin: currentSkin.id });
+            lobbyRef.child(myRoomId).once('value', snap => {
+                let d = snap.val(); if(d) { enemyBird.y = d.enemyY; enemyBird.currentSkinId = d.enemySkin; if (d.pipes) pipes = JSON.parse(d.pipes); }
+            });
+        }
+    }, 45);
+}
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
 }
 
 function drawPixelBird(bx, by, skinId) {
+    // ЖЕСТКИЙ ФИКС: Запасным вариантом берется строго объект skins[0], а не весь массив целиком!
     let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
@@ -292,9 +285,21 @@ function draw() {
     ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);
     if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }
 }
+
 function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+function loadFirebaseScripts() {
+    const s1 = document.createElement("script"); s1.src = "https://gstatic.com";
+    const s2 = document.createElement("script"); s2.src = "https://gstatic.com";
+    s1.onload = () => {
+        document.body.appendChild(s2);
+        s2.onload = () => { if (typeof initFirebase === "function") initFirebase(); };
+    };
+    document.body.appendChild(s1);
+}
+
 currentSkin = skins[0]; resetGame(); loop();
-window.addEventListener("load", () => { updateShopUI(); });
+window.addEventListener("load", () => { updateShopUI(); loadFirebaseScripts(); });
 </script>
 </body>
 </html>
