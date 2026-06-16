@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Absolute Network Edition</title>
+    <title>Flappy Bird MMO: Real LOBBY Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -12,9 +12,9 @@
         .shop,.multiplayer-box,.leaderboard,.settings{background:#000;padding:15px;display:flex;flex-direction:column;gap:10px;border:4px solid #444;border-radius:10px;}
         h2{margin:0;text-align:center;font-size:16px;text-transform:uppercase;border-bottom:4px dashed #444;padding-bottom:8px;}
         .coins-display{color:#ffd700;font-size:16px;text-align:center;font-weight:bold;background:#222;padding:8px;border:2px solid #ffd700;}
-        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-size:12px;text-transform:uppercase;}
-        .room-item{display:flex;justify-content:space-between;align-items:center;background:#222;padding:6px 10px;border:2px solid #444;font-size:11px;margin-bottom:2px;}
-        .join-btn{background:#2e7d32;color:white;border:1px solid #fff;padding:4px 8px;cursor:pointer;font-weight:bold;font-size:10px;}
+        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-size:12px;text-transform:uppercase;width:100%;box-sizing:border-box;}
+        .room-item{display:flex;justify-content:space-between;align-items:center;background:#222;padding:8px 10px;border:2px solid #444;font-size:11px;margin-bottom:4px;border-radius:4px;}
+        .join-btn{background:#00aa00;color:white;border:2px solid #fff;padding:4px 8px;cursor:pointer;font-weight:bold;font-size:11px;text-transform:uppercase;}
         .skin-item,.leader-item{display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 12px;border:2px solid #333;}
         .skin-name{font-weight:bold;font-size:14px;text-transform:uppercase;}
         .shop-btn{background:#00aa00;color:white;border:2px solid #fff;padding:6px 10px;cursor:pointer;font-weight:bold;min-width:85px;}
@@ -22,7 +22,7 @@
         .shop-btn.equipped{background:#0000aa;}
         .setting-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;background:#111;padding:8px 12px;border:2px solid #333;}
         .setting-row input{width:16px;height:16px;cursor:pointer;}
-        #rooms-list{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:5px;border:2px solid #333;}
+        #rooms-list{max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:6px;border:2px solid #333;border-radius:6px;}
         @media(max-width:768px){.container{flex-direction:column;align-items:center;}canvas,.side-panel{width:100%;max-width:400px;}}
     </style>
 </head>
@@ -32,8 +32,8 @@
     <div class="side-panel">
         <div class="multiplayer-box">
             <h2>GLOBAL ONLINE LOBBY</h2>
-            <button class="mp-btn" id="host-btn" onclick="createNewServerRoom()" style="width:100%;">CREATE NEW GAME</button>
-            <div style="font-size:10px;color:#aaa;margin-top:5px;text-align:center;text-transform:uppercase;font-weight:bold;">Игроки на сайте / Комнаты:</div>
+            <button class="mp-btn" id="host-btn" onclick="createNewServerRoom()">CREATE NEW GAME</button>
+            <div style="font-size:10px;color:#aaa;margin-top:6px;text-align:center;text-transform:uppercase;font-weight:bold;">Игроки на сайте / Комнаты:</div>
             <div id="rooms-list"></div>
             <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Подключение к сети...</div>
         </div>
@@ -62,15 +62,15 @@ let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
 // ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН
-let myPlayerName = localStorage.getItem('flappy_device_name_v10');
+let myPlayerName = localStorage.getItem('flappy_device_name_v11');
 if (!myPlayerName) {
     let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
     if (!userName || !userName.trim()) userName = "User_" + Math.floor(1000 + Math.random() * 9000);
     myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
-    localStorage.setItem('flappy_device_name_v10', myPlayerName);
+    localStorage.setItem('flappy_device_name_v11', myPlayerName);
 }
 
-// НАСТРОЙКА КАНАЛА СВЯЗИ NTFY (ОБХОДИТ ЛЮБЫЕ БЛОКИРОВКИ)
+// УНИКАЛЬНЫЙ КАНАЛ СВЯЗИ ДЛЯ БАРНАУЛА (БЕЗ БЛОКИРОВОК)
 const NETWORK_TOPIC = "flappy_mmo_barnaul_2026";
 let isHost = false, myRoomId = "", eventSource = null;
 
@@ -117,7 +117,7 @@ function getSkyColor() { return "rgb(112, 197, 206)"; }
 
 const birdMapRaw = ["00000111111000000", "00001222222110000", "00112222221331000", "01225522213113100", "12222552213113100", "12222222221331000", "12222222222111100", "1222222224444410", "0122222241111410", "0011222441114100", "0000114444441000", "0000001111110000"];
 
-// АБСОЛЮТНО ЖЕСТКАЯ ИЗОЛЯЦИЯ ОТ ОШИБОК МАССИВА
+// ИЗОЛИРОВАННЫЙ СТАРТОВЫЙ СКИН (БАГ С МАССИВОМ ИСКОРЕНЕН)
 let currentSkin = {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true};
 
 const allShopSkins = [
@@ -154,7 +154,6 @@ function fetchOnlineLeaderboard() {
     }
 }
 
-// ОТПРАВКА ДАННЫХ В СЕТЕВОЙ ШЛЮЗ
 function broadcastNetworkMessage(msgObj) {
     fetch(`https://ntfy.sh{NETWORK_TOPIC}`, {
         method: 'POST',
@@ -167,12 +166,11 @@ window.createNewServerRoom = function() {
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     
-    // Регулярно объявляем о нашей комнате в эфир
     setInterval(() => {
         if (isHost && myRoomId) {
             broadcastNetworkMessage({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
         }
-    }, 3000);
+    }, 2000);
 }
 
 window.joinServerRoom = function(roomId) {
@@ -182,7 +180,6 @@ window.joinServerRoom = function(roomId) {
     enemyBird.active = true;
 }
 
-// ИНИЦИАЛИЗАЦИЯ ПОТОКА ЖИВОГО ОНЛАЙНА
 function initNetwork() {
     eventSource = new EventSource(`https://ntfy.sh{NETWORK_TOPIC}/sse`);
     document.getElementById("mp-status").innerHTML = "🟢 СЕТЬ АКТИВНА!";
@@ -192,26 +189,26 @@ function initNetwork() {
             const msg = JSON.parse(event.data);
             const container = document.getElementById("rooms-list"); if (!container) return;
 
-            // Считываем появление комнат лобби
+            // ЖЕСТКИЙ ФИКС: Рендерим комнату и кнопку JOIN без пропадания
             if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
-                if (document.getElementById(msg.roomId)) return;
-                let div = document.createElement("div"); div.id = msg.roomId; div.className = "room-item";
-                div.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
-                container.appendChild(div);
-                setTimeout(() => { if(document.getElementById(msg.roomId)) document.getElementById(msg.roomId).remove(); }, 6000);
+                let roomDiv = document.getElementById(msg.roomId);
+                if (!roomDiv) {
+                    roomDiv = document.createElement("div"); roomDiv.id = msg.roomId; roomDiv.className = "room-item";
+                    container.appendChild(roomDiv);
+                }
+                roomDiv.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
             }
 
-            // Читаем сигнал присутствия игроков (Пинг)
+            // ЖЕСТКИЙ ФИКС: Стабильный рендеринг игроков онлайн
             if (msg.type === 'ping_user' && msg.sender !== myPlayerName) {
-                let divId = "usr_" + msg.sender;
-                if (document.getElementById(divId)) return;
-                let div = document.createElement("div"); div.id = divId; div.className = "room-item online-user-item";
-                div.innerHTML = `<span style="color:#00ff00">● ${msg.sender}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
-                container.insertBefore(div, container.firstChild);
-                setTimeout(() => { if(document.getElementById(divId)) document.getElementById(divId).remove(); }, 8000);
+                let userDiv = document.getElementById("usr_" + msg.sender);
+                if (!userDiv) {
+                    userDiv = document.createElement("div"); userDiv.id = "usr_" + msg.sender; userDiv.className = "room-item";
+                    container.insertBefore(userDiv, container.firstChild);
+                }
+                userDiv.innerHTML = `<span style="color:#00ff00">● ${msg.sender}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
             }
 
-            // Синхронизация дуэли в реальном времени
             if (myRoomId && msg.roomId === myRoomId && msg.sender !== myPlayerName) {
                 if (msg.type === 'game_sync') {
                     enemyBird.active = true; enemyBird.y = msg.y; enemyBird.currentSkinId = msg.skin;
@@ -221,19 +218,15 @@ function initNetwork() {
         } catch(e) {}
     };
 
-    // Вечный фоновый сигнал, что мы сидим на сайте
-    setInterval(() => {
-        broadcastNetworkMessage({ type: 'ping_user', sender: myPlayerName });
-    }, 4000);
+    setInterval(() => { broadcastNetworkMessage({ type: 'ping_user', sender: myPlayerName }); }, 3000);
 }
 
-// Потоковый стрим координат птицы во время полёта
 setInterval(() => {
     if (!myRoomId) return;
     broadcastNetworkMessage({
         type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null
     });
-}, 70);
+}, 60);
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
@@ -244,7 +237,7 @@ function drawPixelBird(bx, by, skinId) {
     
     // ЕСЛИ ВЫБРАН БОННИ — РИСУЕМ ДЕТАЛИЗИРОВАННЫЙ ПИКСЕЛЬ-АРТ АНИМАТРОНИКА
     if (targetSkin.id === 'freddy') {
-        // 1. Длинные фиолетовые уши с розовой сердцевиной
+        // 1. Длинные фиолетовые уши со светлой сердцевиной
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by - 14), 6, 14); ctx.fillRect(Math.floor(bx + 18), Math.floor(by - 14), 6, 14);
         ctx.fillStyle = "#673ab7"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by - 12), 4, 12); ctx.fillRect(Math.floor(bx + 20), Math.floor(by - 12), 4, 12);
         ctx.fillStyle = "#ffb74d"; ctx.fillRect(Math.floor(bx + 7), Math.floor(by - 10), 2, 8); ctx.fillRect(Math.floor(bx + 21), Math.floor(by - 10), 2, 8);
@@ -285,7 +278,6 @@ function drawPixelBird(bx, by, skinId) {
         ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 10), 8, 2); 
     }
 
-    // Если у скина есть шляпа (например, Пират)
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 4), 20, 4); ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 14), 12, 10);
     }
@@ -350,7 +342,8 @@ function draw() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-resetGame(); loop();
+// ЖЕСТКИЙ ИСПРАВЛЕННЫЙ БЛОК ИНИЦИАЛИЗАЦИИ
+currentSkin = allShopSkins[0]; resetGame(); loop();
 window.addEventListener("load", () => { 
     updateShopUI(); 
     fetchOnlineLeaderboard();
