@@ -1,9 +1,96 @@
-﻿<!DOCTYPE html>
+﻿<script>
+const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
+let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
+let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
+let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
+
+// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА С ЗАЩИТОЙ ОТ СБРОСА
+let myPlayerName = localStorage.getItem('flappy_device_name_v11');
+if (!myPlayerName) {
+    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
+    if (!userName || !userName.trim()) userName = "User_" + Math.floor(1000 + Math.random() * 9000);
+    myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
+    localStorage.setItem('flappy_device_name_v11', myPlayerName);
+}
+
+const NETWORK_TOPIC = "flappy_mmo_barnaul_2026_v2";
+let isHost = false, myRoomId = "", eventSource = null;
+
+const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
+let audioCtx = null, musicInterval = null;
+
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx && !musicInterval) startAmbientMusic();
+}
+
+function playSound(freq, duration, type = 'sine', ramp = true) {
+    if (!sfxToggle || !sfxToggle.checked) return;
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+    if (audioCtx.state === 'suspended') return;
+    try {
+        let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+        osc.type = (typeof type === 'string') ? type : 'sine'; 
+        osc.frequency.setValueAtTime(Number(freq), audioCtx.currentTime);
+        if (ramp) osc.frequency.exponentialRampToValueAtTime(Number(freq) / 2, audioCtx.currentTime + Number(duration));
+        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime); 
+        gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + Number(duration));
+        osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + Number(duration));
+    } catch (e) {}
+}
+
+function startAmbientMusic() {
+    if (musicInterval) clearInterval(musicInterval);
+    let notes = [130.81, 146.83, 164.81, 196.00], step = 0;
+    musicInterval = setInterval(() => {
+        if (musicToggle && musicToggle.checked && audioCtx && audioCtx.state === 'running' && !gameOver) {
+            try {
+                let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(notes[step % notes.length], audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+                osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.8); step++;
+            } catch (e) {}
+        }
+    }, 1000);
+}
+
+// ЛЕГЕНДАРНАЯ ФИЧА: Плавное превращение неба в сочный пиксельный багровый закат!
+function getSkyColor() {
+    let factor = Math.min(score / 25, 1);
+    let r = Math.floor(112 + (211 - 112) * factor);
+    let g = Math.floor(197 + (47 - 197) * factor);
+    let b = Math.floor(206 + (47 - 206) * factor);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+const birdMapRaw = ["00000111111000000", "00001222222110000", "00112222221331000", "01225522213113100", "12222552213113100", "12222222221331000", "12222222222111100", "1222222224444410", "0122222241111410", "0011222441114100", "0000114444441000", "0000001111110000"];
+
+let currentSkin = {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true};
+
+const allShopSkins = [
+    {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true},
+    {id: 'cyber', name: 'Cyber Agent', color: '#00e5ff', beak: '#ff007f', hat: false, price: 50, purchased: false},
+    {id: 'pirate', name: 'Pirate Bird', color: '#4e342e', beak: '#ffb300', hat: true, price: 100, purchased: false},
+    {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
+    {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
+];
+
+let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
+let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
+
+function broadcastNetworkMessage(msgObj) {
+    fetch(`https://ntfy.sh{NETWORK_TOPIC}`, {
+        method: 'POST',
+        body: JSON.stringify(msgObj)
+    }).catch(e => console.warn("Ошибка отправки сетевого пакета"));
+}
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Real LOBBY Edition</title>
+    <title>Flappy Bird MMO: Perfect Sunset Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -61,17 +148,16 @@ let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
 let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
-// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН
+// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА С ЗАЩИТОЙ ОТ СБРОСА НИКА
 let myPlayerName = localStorage.getItem('flappy_device_name_v11');
 if (!myPlayerName) {
-    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
+    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ FIREBASE LOBBY! Введите ваш ник:", "Игрок");
     if (!userName || !userName.trim()) userName = "User_" + Math.floor(1000 + Math.random() * 9000);
     myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
     localStorage.setItem('flappy_device_name_v11', myPlayerName);
 }
 
-// УНИКАЛЬНЫЙ КАНАЛ СВЯЗИ ДЛЯ БАРНАУЛА (БЕЗ БЛОКИРОВОК)
-const NETWORK_TOPIC = "flappy_mmo_barnaul_2026";
+const NETWORK_TOPIC = "flappy_mmo_barnaul_2026_v2";
 let isHost = false, myRoomId = "", eventSource = null;
 
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
@@ -113,11 +199,18 @@ function startAmbientMusic() {
     }, 1000);
 }
 
-function getSkyColor() { return "rgb(112, 197, 206)"; }
+// ВОЗВРАЩЁННАЯ ФИЧА: Небо плавно превращается в сочный пиксельный багровый закат!
+function getSkyColor() {
+    let factor = Math.min(score / 25, 1);
+    let r = Math.floor(112 + (211 - 112) * factor);
+    let g = Math.floor(197 + (47 - 197) * factor);
+    let b = Math.floor(206 + (47 - 206) * factor);
+    return `rgb(${r}, ${g}, ${b})`;
+}
 
 const birdMapRaw = ["00000111111000000", "00001222222110000", "00112222221331000", "01225522213113100", "12222552213113100", "12222222221331000", "12222222222111100", "1222222224444410", "0122222241111410", "0011222441114100", "0000114444441000", "0000001111110000"];
 
-// ИЗОЛИРОВАННЫЙ СТАРТОВЫЙ СКИН (БАГ С МАССИВОМ ИСКОРЕНЕН)
+// ЖЁСТКАЯ ИЗОЛЯЦИЯ: Птица — это одиночный рабочий объект, серый экран побеждён!
 let currentSkin = {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true};
 
 const allShopSkins = [
@@ -130,12 +223,25 @@ const allShopSkins = [
 
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
+
+function broadcastNetworkMessage(msgObj) {
+    fetch(`https://ntfy.sh{NETWORK_TOPIC}`, {
+        method: 'POST',
+        body: JSON.stringify(msgObj)
+    }).catch(e => console.warn("Ошибка отправки сетевого пакета"));
+}
 function sendHighScoreOnline(finalScore) {
     if (finalScore <= 0) return;
-    if (finalScore > personalBest) { personalBest = finalScore; localStorage.setItem('flappy_personal_best', personalBest); }
+    if (finalScore > personalBest) {
+        personalBest = finalScore;
+        localStorage.setItem('flappy_personal_best', personalBest);
+    }
     let existing = localLeaderboard.find(p => p.name === myPlayerName);
     if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
     else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
+    
+    // СИНХРОНИЗАЦИЯ: Отправляем рекорд в эфир, чтобы обновить таблицы на всех устройствах
+    broadcastNetworkMessage({ type: 'sync_leaderboard', sender: myPlayerName, score: finalScore });
     fetchOnlineLeaderboard();
 }
 
@@ -154,13 +260,6 @@ function fetchOnlineLeaderboard() {
     }
 }
 
-function broadcastNetworkMessage(msgObj) {
-    fetch(`https://ntfy.sh{NETWORK_TOPIC}`, {
-        method: 'POST',
-        body: JSON.stringify(msgObj)
-    }).catch(e => console.warn("Ошибка отправки сетевого пакета"));
-}
-
 window.createNewServerRoom = function() {
     initAudio(); isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
     document.getElementById("host-btn").style.display = "none";
@@ -170,7 +269,7 @@ window.createNewServerRoom = function() {
         if (isHost && myRoomId) {
             broadcastNetworkMessage({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
         }
-    }, 2000);
+    }, 1500);
 }
 
 window.joinServerRoom = function(roomId) {
@@ -189,7 +288,7 @@ function initNetwork() {
             const msg = JSON.parse(event.data);
             const container = document.getElementById("rooms-list"); if (!container) return;
 
-            // ЖЕСТКИЙ ФИКС: Рендерим комнату и кнопку JOIN без пропадания
+            // ЖЕСТКИЙ ФИКС: Рендерим комнату и вечную кнопку JOIN
             if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
                 let roomDiv = document.getElementById(msg.roomId);
                 if (!roomDiv) {
@@ -199,7 +298,7 @@ function initNetwork() {
                 roomDiv.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
             }
 
-            // ЖЕСТКИЙ ФИКС: Стабильный рендеринг игроков онлайн
+            // ЖЕСТКИЙ ФИКС: Удерживаем игроков онлайн в боковой панели
             if (msg.type === 'ping_user' && msg.sender !== myPlayerName) {
                 let userDiv = document.getElementById("usr_" + msg.sender);
                 if (!userDiv) {
@@ -207,6 +306,14 @@ function initNetwork() {
                     container.insertBefore(userDiv, container.firstChild);
                 }
                 userDiv.innerHTML = `<span style="color:#00ff00">● ${msg.sender}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
+            }
+
+            // ОБНОВЛЕНИЕ ГЛОБАЛЬНОЙ ТАБЛИЦЫ РЕКОРДОВ ТОП-3
+            if (msg.type === 'sync_leaderboard' && msg.sender !== myPlayerName) {
+                let found = localLeaderboard.find(p => p.name === msg.sender);
+                if (found) { if (parseInt(msg.score) > found.score) found.score = parseInt(msg.score); } 
+                else { localLeaderboard.push({ name: msg.sender, score: parseInt(msg.score) }); }
+                fetchOnlineLeaderboard();
             }
 
             if (myRoomId && msg.roomId === myRoomId && msg.sender !== myPlayerName) {
@@ -218,7 +325,7 @@ function initNetwork() {
         } catch(e) {}
     };
 
-    setInterval(() => { broadcastNetworkMessage({ type: 'ping_user', sender: myPlayerName }); }, 3000);
+    setInterval(() => { broadcastNetworkMessage({ type: 'ping_user', sender: myPlayerName }); }, 2500);
 }
 
 setInterval(() => {
@@ -226,7 +333,7 @@ setInterval(() => {
     broadcastNetworkMessage({
         type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null
     });
-}, 60);
+}, 50);
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
@@ -342,7 +449,6 @@ function draw() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-// ЖЕСТКИЙ ИСПРАВЛЕННЫЙ БЛОК ИНИЦИАЛИЗАЦИИ
 currentSkin = allShopSkins[0]; resetGame(); loop();
 window.addEventListener("load", () => { 
     updateShopUI(); 
