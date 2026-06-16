@@ -153,26 +153,30 @@ function fetchOnlineLeaderboard() {
     container.appendChild(personalItem);
 }
 
-const configuration = {'iceServers': [{'urls': 'stun:://google.com'}]};
+// УБРАНЫ ВНЕШНИЕ СЕРВЕРЫ GOOGLE ДЛЯ НАДЕЖНОСТИ И СНЯТИЯ БЛОКИРОВОК
+const configuration = {'iceServers': []};
 
 window.startHost = function() {
-    if (window.location.protocol === 'file:') {
-        return alert("Локальный запуск! Для игры по сети загрузите этот index.html на GitHub Pages.");
-    }
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-status").innerHTML = "Генерация кода комнаты..."; isHost = true;
+    document.getElementById("mp-status").innerHTML = "Создание комнаты..."; isHost = true;
     localConnection = new RTCPeerConnection(configuration);
     dataChannel = localConnection.createDataChannel("gameChannel"); setupChannelListeners();
     
-    let iceTimeout = setTimeout(() => { triggerTokenDisplay(); }, 3000);
-    localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(iceTimeout); triggerTokenDisplay(); } };
-    localConnection.createOffer().then(o => localConnection.setLocalDescription(o));
+    localConnection.onicecandidate = e => { 
+        if(!e.candidate) { triggerTokenDisplay(); } 
+    };
+    localConnection.createOffer().then(o => {
+        return localConnection.setLocalDescription(o);
+    }).then(() => {
+        // Если ICE-кандидаты не собираются из-заfile://, принудительно выводим код через 100мс
+        setTimeout(() => { if(document.getElementById("mp-status").innerHTML === "Создание комнаты...") triggerTokenDisplay(); }, 100);
+    });
 }
 
 function triggerTokenDisplay() {
     let token = btoa(JSON.stringify(localConnection.localDescription));
-    document.getElementById("mp-area").innerHTML = `<input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly><input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга..."><button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>`;
-    document.getElementById("mp-status").innerHTML = "Ожидание ответа от друга...";
+    document.getElementById("mp-area").innerHTML = `<span style="font-size:10px;color:#aaa;">Код твоей комнаты (кликни и скопируй):</span><input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly><span style="font-size:10px;color:#aaa;margin-top:4px;">Вставь ответный код друга снизу:</span><input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга сюда..."><button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>`;
+    document.getElementById("mp-status").innerHTML = "Ожидание кода от друга...";
 }
 
 window.acceptAnswer = function() {
@@ -181,12 +185,9 @@ window.acceptAnswer = function() {
 }
 
 window.startJoin = function() {
-    if (window.location.protocol === 'file:') {
-        return alert("Локальный запуск! Для игры по сети загрузите этот index.html на GitHub Pages.");
-    }
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `<input id="host-code-input" class="mp-input" placeholder="Вставь код хоста..."><button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>`;
-    document.getElementById("mp-status").innerHTML = "Ввод кода...";
+    document.getElementById("mp-area").innerHTML = `<span style="font-size:10px;color:#aaa;">Вставь код создателя комнаты:</span><input id="host-code-input" class="mp-input" placeholder="Вставь код хоста..."><button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>`;
+    document.getElementById("mp-status").innerHTML = "Ожидание ввода кода...";
 }
 
 window.executeJoin = function() {
@@ -195,16 +196,19 @@ window.executeJoin = function() {
     localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
     try {
         localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
-        let iceTimeout = setTimeout(() => { triggerJoinTokenDisplay(); }, 3000);
-        localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(iceTimeout); triggerJoinTokenDisplay(); } };
-        localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
+        localConnection.onicecandidate = e => { if(!e.candidate) { triggerJoinTokenDisplay(); } };
+        localConnection.createAnswer().then(a => {
+            return localConnection.setLocalDescription(a);
+        }).then(() => {
+            setTimeout(() => { if(document.getElementById("mp-status").innerHTML === "Ожидание ввода кода...") triggerJoinTokenDisplay(); }, 100);
+        });
     } catch(e) { alert("Неверный код!"); }
 }
 
 function triggerJoinTokenDisplay() {
     let token = btoa(JSON.stringify(localConnection.localDescription));
-    document.getElementById("mp-area").innerHTML = `<input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>`;
-    document.getElementById("mp-status").innerHTML = "Код ответа готов! Перешли его Создателю.";
+    document.getElementById("mp-area").innerHTML = `<span style="font-size:10px;color:#aaa;">Твой ответный код (перешли его хосту):</span><input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>`;
+    document.getElementById("mp-status").innerHTML = "Код ответа готов! Отправь его Создателю.";
 }
 
 function setupChannelListeners() {
