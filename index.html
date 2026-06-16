@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Attack Freddy</title>
+    <title>Flappy Bird MMO: Attack Freddy Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -12,8 +12,8 @@
         .shop,.multiplayer-box,.leaderboard,.settings{background:#000;padding:15px;display:flex;flex-direction:column;gap:10px;border:4px solid #444;border-radius:10px;}
         h2{margin:0;text-align:center;font-size:16px;text-transform:uppercase;border-bottom:4px dashed #444;padding-bottom:8px;}
         .coins-display{color:#ffd700;font-size:16px;text-align:center;font-weight:bold;background:#222;padding:8px;border:2px solid #ffd700;}
-        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-family:inherit;font-size:12px;text-transform:uppercase;}
-        .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;text-align:center;font-size:11px;width:100%;box-sizing:border-box;}
+        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-size:12px;text-transform:uppercase;}
+        .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;text-align:center;font-size:14px;width:100%;box-sizing:border-box;}
         .skin-item,.leader-item{display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 12px;border:2px solid #333;}
         .skin-name{font-weight:bold;font-size:14px;text-transform:uppercase;}
         .shop-btn{background:#00aa00;color:white;border:2px solid #fff;padding:6px 10px;cursor:pointer;font-weight:bold;min-width:85px;}
@@ -118,7 +118,7 @@ const skins = [
     {id: 'freddy', name: 'Attack Freddy', color: '#6d4c41', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0]; // ЖЁСТКО ИСПРАВЛЕНО: строго первый объект по индексу 0, а не массив
+let currentSkin = skins[0];
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -167,16 +167,33 @@ function triggerTokenDisplay() {
     let token = btoa(JSON.stringify(localConnection.localDescription));
     let gameLink = window.location.origin + window.location.pathname + "?join=" + token;
 
-    document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:10px;color:#aaa;">Наведи телефон на этот QR-код для входа:</span>
-        <div style="background:#fff;padding:10px;border-radius:8px;margin:5px auto;width:200px;height:200px;display:flex;justify-content:center;align-items:center;">
-            <img src="https://qrserver.com{encodeURIComponent(gameLink)}" style="width:200px;height:200px;">
-        </div>
-        <span style="font-size:10px;color:#aaa;margin-top:5px;">Или скопируй этот текстовый код ответа друга:</span>
-        <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга сюда...">
-        <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>
-    `;
-    document.getElementById("mp-status").innerHTML = "Ожидание сканирования или ответа...";
+    document.getElementById("mp-area").innerHTML = `<div style="text-align:center;color:#ffd700;font-size:12px;">Упаковка кода в короткую ссылку...</div>`;
+
+    fetch(`https://is.gd{encodeURIComponent(gameLink)}`)
+        .then(res => res.json())
+        .then(data => {
+            let shortUrl = data.shorturl || gameLink;
+            document.getElementById("mp-area").innerHTML = `
+                <span style="font-size:10px;color:#aaa;">1. Наведи телефон на QR-код или введи ссылку руками:</span>
+                <div style="background:#fff;padding:10px;border-radius:8px;margin:5px auto;width:180px;height:180px;display:flex;justify-content:center;align-items:center;">
+                    <img src="https://qrserver.com{encodeURIComponent(shortUrl)}" style="width:180px;height:180px;">
+                </div>
+                <input class="mp-input" type="text" value="${shortUrl}" onclick="this.select()" readonly style="color:#ffd700;font-weight:bold;margin-bottom:8px;">
+                <span style="font-size:10px;color:#aaa;">2. Вставь короткий ответный код с телефона сюда:</span>
+                <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга...">
+                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">3. ПОДКЛЮЧИТЬ ИГРОКА</button>
+            `;
+            document.getElementById("mp-status").innerHTML = "Комната готова! Ожидание входа...";
+        })
+        .catch(() => {
+            document.getElementById("mp-area").innerHTML = `
+                <span style="font-size:10px;color:#ff5555;">Сервер сокращения занят. Используйте прямой токен:</span>
+                <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
+                <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга...">
+                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>
+            `;
+            document.getElementById("mp-status").innerHTML = "Резервный режим обмена кодами";
+        });
 }
 
 window.acceptAnswer = function() {
@@ -186,7 +203,7 @@ window.acceptAnswer = function() {
 
 window.startJoin = function() {
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `<input id="host-code-input" class="mp-input" placeholder="Вставь код хоста..."><button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>`;
+    document.getElementById("mp-area").innerHTML = `<input id="host-code-input" class="mp-input" placeholder="Вставь длинный код хоста..."><button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>`;
     document.getElementById("mp-status").innerHTML = "Ожидание ввода кода...";
 }
 
@@ -203,7 +220,12 @@ window.executeJoin = function() {
 
 function triggerJoinTokenDisplay() {
     let token = btoa(JSON.stringify(localConnection.localDescription));
-    document.getElementById("mp-area").innerHTML = `<span style="font-size:10px;color:#aaa;">Скопируй этот текст и вставь в нижнее поле на ПК:</span><input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>`;
+    document.getElementById("mp-area").innerHTML = `
+        <span style="font-size:10px;color:#aaa;">Перепиши или скопируй эти 6 символов ответа на ПК:</span>
+        <input class="mp-input" type="text" value="${token.substring(0,6)}" onclick="this.select()" readonly style="font-size:24px;color:#00ff00;letter-spacing:2px;font-weight:bold;">
+        <span style="font-size:9px;color:#666;margin-top:4px;">Полный технический токен:</span>
+        <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly style="font-size:9px;height:20px;">
+    `;
     document.getElementById("mp-status").innerHTML = "Код ответа готов! Вставь его на ПК.";
 }
 
@@ -259,7 +281,7 @@ function drawPixelRect(x, y, w, h, fillColor) {
 }
 
 function drawPixelBird(bx, by, skinId) {
-    let targetSkin = skins.find(s => s.id === skinId) || skins; let pSize = 2;
+    let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
             let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
