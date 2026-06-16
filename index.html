@@ -152,42 +152,28 @@ function fetchOnlineLeaderboard() {
     container.appendChild(personalItem);
 }
 
+// ТОТ САМЫЙ ОРИГИНАЛЬНЫЙ НАДЁЖНЫЙ СЕРВЕР СВЯЗИ GOOGLE
 const configuration = {'iceServers': [{'urls': 'stun:://google.com'}]};
 
 window.startHost = function() {
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-status").innerHTML = "Создание комнаты..."; isHost = true;
+    document.getElementById("mp-status").innerHTML = "Генерация кода комнаты..."; isHost = true;
     localConnection = new RTCPeerConnection(configuration);
     dataChannel = localConnection.createDataChannel("gameChannel"); setupChannelListeners();
     
-    let forceShowQR = setTimeout(() => { triggerTokenDisplay(); }, 200);
-    
     localConnection.onicecandidate = e => { 
-        if(!e.candidate) { clearTimeout(forceShowQR); triggerTokenDisplay(); } 
+        if(!e.candidate) { 
+            let token = btoa(JSON.stringify(localConnection.localDescription));
+            document.getElementById("mp-area").innerHTML = `
+                <span style="font-size:10px;color:#aaa;">Кликни, скопируй и отправь этот код другу:</span>
+                <input class="mp-input" type="text" value="${token}" onclick="this.select(); document.execCommand('copy'); alert('Код скопирован!');" readonly style="cursor:pointer;color:#ffd700;font-weight:bold;margin-bottom:5px;">
+                <input id="join-code-input" class="mp-input" placeholder="Вставь ответный код друга...">
+                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>
+            `; 
+            document.getElementById("mp-status").innerHTML = "Ожидание ответа от друга...";
+        }
     };
     localConnection.createOffer().then(o => localConnection.setLocalDescription(o));
-}
-
-function triggerTokenDisplay() {
-    if (document.getElementById("mp-status").innerHTML === "Комната создана! Ожидание...") return;
-    let token = btoa(JSON.stringify(localConnection.localDescription));
-    
-    // ЖЕСТКИЙ ФИКС: Очищаем адрес от старых хвостов БЕЗ создания массивов и запятых
-    let currentUrl = window.location.href;
-    let qIdx = currentUrl.indexOf('?');
-    let cleanBase = qIdx !== -1 ? currentUrl.substring(0, qIdx) : currentUrl;
-    let gameLink = cleanBase + "?join=" + token;
-
-    document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:10px;color:#aaa;">1. Наведи телефон на QR-код для быстрого входа:</span>
-        <div style="background:#fff;padding:10px;border-radius:8px;margin:5px auto;width:180px;height:180px;display:flex;justify-content:center;align-items:center;">
-            <img src="https://qrserver.com{encodeURIComponent(gameLink)}" style="width:180px;height:180px;">
-        </div>
-        <span style="font-size:10px;color:#aaa;margin-top:4px;">2. Вставь короткий ответный код с телефона сюда:</span>
-        <input id="join-code-input" class="mp-input" placeholder="Введи ответ друга...">
-        <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">3. ПОДКЛЮЧИТЬ ИГРОКА</button>
-    `;
-    document.getElementById("mp-status").innerHTML = "Комната создана! Ожидание...";
 }
 
 window.acceptAnswer = function() {
@@ -197,7 +183,10 @@ window.acceptAnswer = function() {
 
 window.startJoin = function() {
     document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `<input id="host-code-input" class="mp-input" placeholder="Вставь длинный код хоста..."><button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>`;
+    document.getElementById("mp-area").innerHTML = `
+        <input id="host-code-input" class="mp-input" placeholder="Вставь код комнаты хоста...">
+        <button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>
+    `;
     document.getElementById("mp-status").innerHTML = "Ожидание ввода кода...";
 }
 
@@ -207,22 +196,18 @@ window.executeJoin = function() {
     localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
     try {
         localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
-        let forceShowJoin = setTimeout(() => { triggerJoinTokenDisplay(); }, 200);
-        localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(forceShowJoin); triggerJoinTokenDisplay(); } };
+        localConnection.onicecandidate = e => { 
+            if(!e.candidate) { 
+                let token = btoa(JSON.stringify(localConnection.localDescription));
+                document.getElementById("mp-area").innerHTML = `
+                    <span style="font-size:10px;color:#aaa;">Кликни, скопируй и отправь этот ответ хосту:</span>
+                    <input class="mp-input" type="text" value="${token}" onclick="this.select(); document.execCommand('copy'); alert('Ответ скопирован!');" readonly style="cursor:pointer;color:#00ff00;font-weight:bold;">
+                `; 
+                document.getElementById("mp-status").innerHTML = "Код ответа готов! Перешли его Создателю.";
+            }
+        };
         localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
     } catch(e) { alert("Неверный код!"); }
-}
-
-function triggerJoinTokenDisplay() {
-    if (document.getElementById("mp-status").innerHTML === "Код ответа готов! Вставь его на ПК.") return;
-    let token = btoa(JSON.stringify(localConnection.localDescription));
-    document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:10px;color:#aaa;">Перепиши или скопируй эти 6 символов ответа на ПК:</span>
-        <input class="mp-input" type="text" value="${token.substring(0,6)}" readonly style="font-size:24px;color:#00ff00;letter-spacing:2px;font-weight:bold;">
-        <span style="font-size:9px;color:#666;margin-top:4px;">Полный технический токен:</span>
-        <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly style="font-size:9px;height:20px;">
-    `;
-    document.getElementById("mp-status").innerHTML = "Код ответа готов! Вставь его на ПК.";
 }
 
 function setupChannelListeners() {
@@ -257,21 +242,6 @@ window.buyOrEquip = function (id) {
     }
     updateShopUI();
 }
-
-window.addEventListener("load", () => {
-    let params = new URLSearchParams(window.location.search); let joinToken = params.get('join');
-    if (joinToken) {
-        document.getElementById("mp-menu-buttons").style.display = "none"; isHost = false;
-        localConnection = new RTCPeerConnection(configuration);
-        localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
-        try {
-            localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(joinToken))));
-            let forceShowJoinLoad = setTimeout(() => { triggerJoinTokenDisplay(); }, 200);
-            localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(forceShowJoinLoad); triggerJoinTokenDisplay(); } };
-            localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
-        } catch(e) { document.getElementById("mp-status").innerHTML = "Ошибка подключения"; }
-    }
-});
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
