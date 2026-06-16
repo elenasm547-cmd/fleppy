@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Absolute Cloud Edition</title>
+    <title>Flappy Bird MMO: Cloud REST Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -71,12 +71,10 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v12', myPlayerName);
 }
 
-// ОФИЦИАЛЬНЫЙ СВЕРХНАДЁЖНЫЙ КАНАЛ СВЯЗИ PUBNUB REST
-const PUB_KEY = "pub-c-8178d8a7-96a8-48bc-b27b-edda0c0e86b0";
-const SUB_KEY = "sub-c-e36dc404-b903-11ea-8a56-2e23d7063aa7";
-const CHANNEL = "flappy_mmo_barnaul_2026_final";
-
+// НАСТРОЙКА АБСОЛЮТНО ЛЕГАЛЬНОГО HTTPS REST ШЛЮЗА КБ (БЕЗ БЛОКИРОВОК)
+const CHANNEL = "flappy_mmo_barnaul_2026_cloud_v3";
 let isHost = false, myRoomId = "", networkLoop = null;
+
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -135,7 +133,9 @@ const allShopSkins = [
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
 
+// ЖЁСТКАЯ ИСПРАВЛЕННАЯ ФИКСАЦИЯ: Выбираем строго первый ОБЪЕКТ, а не массив allShopSkins!
 let currentSkin = allShopSkins[0]; 
+
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -167,7 +167,7 @@ function fetchOnlineLeaderboard() {
 
 // УЛЬТРА-ПРОЧНЫЙ СЕТЕВОЙ ОТПРАВИТЕЛЬ REST-ПАКЕТОВ
 function sendRestPacket(msgObj) {
-    const url = `https://pndsn.com{PUB_KEY}/${SUB_KEY}/0/${CHANNEL}/0`;
+    const url = `https://pndsn.com{CHANNEL}/0`;
     fetch(url, { method: 'POST', body: JSON.stringify(msgObj) }).catch(e => {});
 }
 
@@ -208,7 +208,7 @@ function initNetwork() {
     // Постоянное REST-слушание сети в фоне через длинный опрос (Long-Polling)
     let lastTimetoken = "0";
     setInterval(() => {
-        fetch(`https://pndsn.com{SUB_KEY}/${CHANNEL}/0?tt=${lastTimetoken}`)
+        fetch(`https://pndsn.com{CHANNEL}/0?tt=${lastTimetoken}`)
         .then(res => res.json()).then(data => {
             if (data && data.t && data.t.t) lastTimetoken = data.t.t;
             if (data && data.m) {
