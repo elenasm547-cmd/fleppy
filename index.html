@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Safe Edition</title>
+    <title>Flappy Bird MMO: Absolute Network Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -25,8 +25,6 @@
         #rooms-list{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:5px;border:2px solid #333;}
         @media(max-width:768px){.container{flex-direction:column;align-items:center;}canvas,.side-panel{width:100%;max-width:400px;}}
     </style>
-    <!-- ПОДКЛЮЧАЕМ СЕТЕВУЮ БИБЛИОТЕКУ -->
-    <script src="https://pubnub.com"></script>
 </head>
 <body>
 <div class="container"> 
@@ -37,7 +35,7 @@
             <button class="mp-btn" id="host-btn" onclick="createNewServerRoom()" style="width:100%;">CREATE NEW GAME</button>
             <div style="font-size:10px;color:#aaa;margin-top:5px;text-align:center;text-transform:uppercase;font-weight:bold;">Игроки на сайте / Комнаты:</div>
             <div id="rooms-list"></div>
-            <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Одиночный режим</div>
+            <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Подключение к сети...</div>
         </div>
         <div class="shop"> 
             <h2>SHOP</h2> 
@@ -63,7 +61,7 @@ let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
 let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
-// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА
+// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН
 let myPlayerName = localStorage.getItem('flappy_device_name_v10');
 if (!myPlayerName) {
     let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
@@ -72,8 +70,10 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v10', myPlayerName);
 }
 
-// ПЕРЕМЕННЫЕ СЕТИ ИНИЦИАЛИЗИРУЮТСЯ СТРОГО В NULL ДЛЯ ЗАЩИТЫ ОТ КРАШЕЙ
-let pubnub = null, isHost = false, myRoomId = "";
+// НАСТРОЙКА КАНАЛА СВЯЗИ NTFY (ОБХОДИТ ЛЮБЫЕ БЛОКИРОВКИ)
+const NETWORK_TOPIC = "flappy_mmo_barnaul_2026";
+let isHost = false, myRoomId = "", eventSource = null;
+
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -154,17 +154,25 @@ function fetchOnlineLeaderboard() {
     }
 }
 
-// ЗАЩИЩЕННАЯ СИСТЕМА ПОДКЛЮЧЕНИЯ К СЕТИ
+// ОТПРАВКА ДАННЫХ В СЕТЕВОЙ ШЛЮЗ
+function broadcastNetworkMessage(msgObj) {
+    fetch(`https://ntfy.sh{NETWORK_TOPIC}`, {
+        method: 'POST',
+        body: JSON.stringify(msgObj)
+    }).catch(e => console.warn("Ошибка отправки сетевого пакета"));
+}
+
 window.createNewServerRoom = function() {
-    initAudio(); if (!pubnub) return alert("Сеть ещё подключается, подождите 2 секунды...");
-    isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
+    initAudio(); isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     
-    pubnub.publish({
-        channel: 'flappy_mmo_global_stream',
-        message: { type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id }
-    }, (status, response) => { if (status.error) console.error("Ошибка отправки лобби:", status); });
+    // Регулярно объявляем о нашей комнате в эфир
+    setInterval(() => {
+        if (isHost && myRoomId) {
+            broadcastNetworkMessage({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
+        }
+    }, 3000);
 }
 
 window.joinServerRoom = function(roomId) {
@@ -174,107 +182,110 @@ window.joinServerRoom = function(roomId) {
     enemyBird.active = true;
 }
 
+// ИНИЦИАЛИЗАЦИЯ ПОТОКА ЖИВОГО ОНЛАЙНА
 function initNetwork() {
-    if (typeof PubNub === "undefined") { 
-        console.warn("Сетевой плагин PubNub ещё загружается...");
-        document.getElementById("mp-status").innerHTML = "Подключение к сети...";
-        return; 
-    }
-    
-    // Безопасное создание экземпляра
-    pubnub = new PubNub({
-        publishKey: 'pub-c-8178d8a7-96a8-48bc-b27b-edda0c0e86b0',
-        subscribeKey: 'sub-c-e36dc404-b903-11ea-8a56-2e23d7063aa7',
-        uuid: myPlayerName,
-        ssl: true
-    });
-
-    pubnub.subscribe({ channels: ['flappy_mmo_global_stream'] });
+    eventSource = new EventSource(`https://ntfy.sh{NETWORK_TOPIC}/sse`);
     document.getElementById("mp-status").innerHTML = "🟢 СЕТЬ АКТИВНА!";
 
-    pubnub.addListener({
-        message: function(event) {
-            const msg = event.message;
+    eventSource.onmessage = function(event) {
+        try {
+            const msg = JSON.parse(event.data);
             const container = document.getElementById("rooms-list"); if (!container) return;
 
+            // Считываем появление комнат лобби
             if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
                 if (document.getElementById(msg.roomId)) return;
                 let div = document.createElement("div"); div.id = msg.roomId; div.className = "room-item";
                 div.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
                 container.appendChild(div);
-                setTimeout(() => { if(document.getElementById(msg.roomId)) document.getElementById(msg.roomId).remove(); }, 12000);
+                setTimeout(() => { if(document.getElementById(msg.roomId)) document.getElementById(msg.roomId).remove(); }, 6000);
             }
 
+            // Читаем сигнал присутствия игроков (Пинг)
+            if (msg.type === 'ping_user' && msg.sender !== myPlayerName) {
+                let divId = "usr_" + msg.sender;
+                if (document.getElementById(divId)) return;
+                let div = document.createElement("div"); div.id = divId; div.className = "room-item online-user-item";
+                div.innerHTML = `<span style="color:#00ff00">● ${msg.sender}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
+                container.insertBefore(div, container.firstChild);
+                setTimeout(() => { if(document.getElementById(divId)) document.getElementById(divId).remove(); }, 8000);
+            }
+
+            // Синхронизация дуэли в реальном времени
             if (myRoomId && msg.roomId === myRoomId && msg.sender !== myPlayerName) {
                 if (msg.type === 'game_sync') {
                     enemyBird.active = true; enemyBird.y = msg.y; enemyBird.currentSkinId = msg.skin;
                     if (!isHost && msg.pipes) pipes = JSON.parse(msg.pipes);
                 }
             }
-        }
-    });
+        } catch(e) {}
+    };
 
-    // Регулярный запрос списка игроков онлайн
+    // Вечный фоновый сигнал, что мы сидим на сайте
     setInterval(() => {
-        if (!pubnub) return;
-        pubnub.hereNow({ channels: ['flappy_mmo_global_stream'] }, function(status, response) {
-            const container = document.getElementById("rooms-list"); if (!container) return;
-            document.querySelectorAll(".online-user-item").forEach(el => el.remove());
-            if (response && response.channels && response.channels['flappy_mmo_global_stream']) {
-                response.channels['flappy_mmo_global_stream'].occupants.forEach(user => {
-                    let div = document.createElement("div"); div.className = "room-item online-user-item";
-                    div.innerHTML = `<span style="color:#00ff00">● ${user.uuid}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
-                    container.insertBefore(div, container.firstChild);
-                });
-            }
-        });
+        broadcastNetworkMessage({ type: 'ping_user', sender: myPlayerName });
     }, 4000);
 }
 
-// Безопасный стрим координат без падения движка
+// Потоковый стрим координат птицы во время полёта
 setInterval(() => {
-    if (!myRoomId || !pubnub) return;
-    pubnub.publish({
-        channel: 'flappy_mmo_global_stream',
-        message: { type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null }
-    }, (status) => {});
-}, 50);
+    if (!myRoomId) return;
+    broadcastNetworkMessage({
+        type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null
+    });
+}, 70);
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
 }
 
 function drawPixelBird(bx, by, skinId) {
-    // ЖЕСТКИЙ ФИКС: Запасным вариантом берется строго первый объект утки под индексом 0, а не массив целиком!
     let targetSkin = allShopSkins.find(s => s.id === skinId) || allShopSkins[0]; let pSize = 2;
-    for (let r = 0; r < birdMapRaw.length; r++) {
-        for (let c = 0; c < birdMapRaw[r].length; c++) {
-            let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
-            let px = bx + (c * pSize), py = by + (r * pSize), color = "#000";
-            if (pixelChar === "1") color = "#000"; else if (pixelChar === "2") color = targetSkin.color; else if (pixelChar === "3") color = '#fff'; else if (pixelChar === "4") color = targetSkin.beak; else if (pixelChar === "5") color = '#fff';
-            ctx.fillStyle = color; ctx.fillRect(Math.floor(px), Math.floor(py), pSize, pSize);
-        }
-    }
     
-    // ОРИГИНАЛЬНЫЕ КАНОНИЧНЫЕ КРЫЛЬЯ FLAPPY BIRD (С КОНТУРОМ И ТЕНЬЮ)
-    ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 10), 12, 8); 
-    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#4e342e" : "#d8a000"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 12), 8, 4); 
-    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#b39ddb" : "#fff"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 10), 8, 2); 
-
-    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ КРОЛИК БОННИ (СМОТРИТ НАПРАВО, В СТОРОНУ ПОЛЁТА)
+    // ЕСЛИ ВЫБРАН БОННИ — РИСУЕМ ДЕТАЛИЗИРОВАННЫЙ ПИКСЕЛЬ-АРТ АНИМАТРОНИКА
     if (targetSkin.id === 'freddy') {
-        ctx.fillStyle = "#673ab7"; ctx.fillRect(Math.floor(bx), Math.floor(by), 34, 24);
-        ctx.fillStyle = "#000"; ctx.strokeRect(Math.floor(bx), Math.floor(by), 34, 24);
+        // 1. Длинные фиолетовые уши с розовой сердцевиной
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by - 14), 6, 14); ctx.fillRect(Math.floor(bx + 18), Math.floor(by - 14), 6, 14);
+        ctx.fillStyle = "#673ab7"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by - 12), 4, 12); ctx.fillRect(Math.floor(bx + 20), Math.floor(by - 12), 4, 12);
+        ctx.fillStyle = "#ffb74d"; ctx.fillRect(Math.floor(bx + 7), Math.floor(by - 10), 2, 8); ctx.fillRect(Math.floor(bx + 21), Math.floor(by - 10), 2, 8);
+
+        // 2. Голова и туловище Бонни
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx), Math.floor(by), 34, 24);
+        ctx.fillStyle = "#673ab7"; ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 2), 30, 20);
+
+        // 3. Большие аниматронные глаза (белок + голубой зрачок)
         ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
-        ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 6), 2, 4); ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 6), 2, 4);
-        
-        // Длинные фиолетовые уши со светлой сердцевиной
-        drawPixelRect(bx + 4, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 6, by - 10, 2, 8, "#b39ddb"); 
-        drawPixelRect(bx + 18, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 20, by - 10, 2, 8, "#b39ddb"); 
-        
-        // Серая мордочка и черный носик
-        drawPixelRect(bx + 14, by + 12, 14, 8, "#e0e0e0"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 12), 4, 3); 
+        ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 6), 4, 4); ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 6), 4, 4);
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 18), Math.floor(by + 7), 2, 2); ctx.fillRect(Math.floor(bx + 28), Math.floor(by + 7), 2, 2);
+
+        // 4. Светлая мордочка и черный нос
+        ctx.fillStyle = "#d1c4e9"; ctx.fillRect(Math.floor(bx + 12), Math.floor(by + 12), 16, 8);
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 18), Math.floor(by + 12), 4, 3);
+
+        // 5. Красная бабочка на шее Бонни
+        ctx.fillStyle = "#d32f2f"; ctx.fillRect(Math.floor(bx + 10), Math.floor(by + 20), 4, 4); ctx.fillRect(Math.floor(bx + 18), Math.floor(by + 20), 4, 4);
+        ctx.fillStyle = "#b71c1c"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 21), 4, 2);
+
+        // 6. Уникальные тёмные крылья для аниматроника
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 10), 10, 8);
+        ctx.fillStyle = "#311b92"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 12), 6, 4);
+    } else {
+        // ЕСЛИ ВЫБРАН ОБЫЧНЫЙ ПЕРСОНАЖ — РИСУЕМ КЛАССИЧЕСКУЮ ПТИЦУ
+        for (let r = 0; r < birdMapRaw.length; r++) {
+            for (let c = 0; c < birdMapRaw[r].length; c++) {
+                let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
+                let px = bx + (c * pSize), py = by + (r * pSize), color = "#000";
+                if (pixelChar === "1") color = "#000"; else if (pixelChar === "2") color = targetSkin.color; else if (pixelChar === "3") color = '#fff'; else if (pixelChar === "4") color = targetSkin.beak; else if (pixelChar === "5") color = '#fff';
+                ctx.fillStyle = color; ctx.fillRect(Math.floor(px), Math.floor(py), pSize, pSize);
+            }
+        }
+        // ОРИГИНАЛЬНЫЕ КАНОНИЧНЫЕ КРЫЛЬЯ FLAPPY BIRD (С КОНТУРОМ И ТЕНЬЮ)
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 10), 12, 8); 
+        ctx.fillStyle = "#d8a000"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 12), 8, 4); 
+        ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 10), 8, 2); 
     }
+
+    // Если у скина есть шляпа (например, Пират)
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 4), 20, 4); ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 14), 12, 10);
     }
@@ -343,7 +354,6 @@ resetGame(); loop();
 window.addEventListener("load", () => { 
     updateShopUI(); 
     fetchOnlineLeaderboard();
-    // БЕЗОПАСНЫЙ ЗАПУСК СЕТИ: Даем игре 1 секунду на отрисовку графики, а потом мягко включаем онлайн
     setTimeout(() => { initNetwork(); }, 1000); 
 });
 </script>
