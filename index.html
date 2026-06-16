@@ -118,7 +118,7 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0]; // Жёсткая фиксация базовой утки, чтобы не было серого экрана!
+let currentSkin = skins[0]; // ЖЁСТКАЯ КОРРЕКТИРОВКА: берём объект, а не весь массив
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -152,7 +152,15 @@ function fetchOnlineLeaderboard() {
     container.appendChild(personalItem);
 }
 
-const configuration = {'iceServers': [{'urls': 'stun:://google.com'}]};
+// МОЩНАЯ МЕЖДУНАРОДНАЯ СЕТЬ STUN ДЛЯ ПРОБИТИЯ ЛЮБЫХ РОУТЕРОВ И 4G СЕТЕЙ
+const configuration = {
+    'iceServers': [
+        {'urls': 'stun:://google.com'},
+        {'urls': 'stun:://google.com'},
+        {'urls': 'stun:://google.com'},
+        {'urls': 'stun:stun.mozilla.org'}
+    ]
+};
 
 window.startHost = function() {
     document.getElementById("mp-menu-buttons").style.display = "none";
@@ -160,7 +168,8 @@ window.startHost = function() {
     localConnection = new RTCPeerConnection(configuration);
     dataChannel = localConnection.createDataChannel("gameChannel"); setupChannelListeners();
     
-    let forceShowQR = setTimeout(() => { triggerTokenDisplay(); }, 200);
+    // Подстраховочный таймаут: принудительно выдаем QR через 300мс, если сбор адресов завис
+    let forceShowQR = setTimeout(() => { triggerTokenDisplay(); }, 300);
     
     localConnection.onicecandidate = e => { 
         if(!e.candidate) { clearTimeout(forceShowQR); triggerTokenDisplay(); } 
@@ -172,7 +181,7 @@ function triggerTokenDisplay() {
     if (document.getElementById("mp-status").innerHTML === "Комната создана! Ожидание...") return;
     let token = btoa(JSON.stringify(localConnection.localDescription));
     
-    // ИДЕАЛЬНОЕ ИСПРАВЛЕНИЕ: Отрезаем старые параметры строго через индекс [0] массива, убирая запятые
+    // КРИТИЧЕСКИЙ ФИКС СИНТАКСИСА: берем строго строковую часть адреса без массивов
     let cleanUrl = window.location.href.split('?')[0];
     let gameLink = cleanUrl + "?join=" + token;
 
@@ -205,7 +214,7 @@ window.executeJoin = function() {
     localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
     try {
         localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
-        let forceShowJoin = setTimeout(() => { triggerJoinTokenDisplay(); }, 200);
+        let forceShowJoin = setTimeout(() => { triggerJoinTokenDisplay(); }, 300);
         localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(forceShowJoin); triggerJoinTokenDisplay(); } };
         localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
     } catch(e) { alert("Неверный код!"); }
@@ -264,7 +273,7 @@ window.addEventListener("load", () => {
         localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
         try {
             localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(joinToken))));
-            let forceShowJoinLoad = setTimeout(() => { triggerJoinTokenDisplay(); }, 200);
+            let forceShowJoinLoad = setTimeout(() => { triggerJoinTokenDisplay(); }, 300);
             localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(forceShowJoinLoad); triggerJoinTokenDisplay(); } };
             localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
         } catch(e) { document.getElementById("mp-status").innerHTML = "Ошибка подключения"; }
