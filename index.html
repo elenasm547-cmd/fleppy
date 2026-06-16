@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Global Lobby Edition</title>
+    <title>Flappy Bird MMO: Safe Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -25,7 +25,7 @@
         #rooms-list{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:5px;border:2px solid #333;}
         @media(max-width:768px){.container{flex-direction:column;align-items:center;}canvas,.side-panel{width:100%;max-width:400px;}}
     </style>
-    <!-- ПОДКЛЮЧАЕМ ВЕЧНУЮ СЕТЬ PUBNUB, РАЗРЕШЁННУЮ НА GITHUB -->
+    <!-- ПОДКЛЮЧАЕМ СЕТЕВУЮ БИБЛИОТЕКУ -->
     <script src="https://pubnub.com"></script>
 </head>
 <body>
@@ -63,7 +63,7 @@ let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
 let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
-// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН В PUBNUB
+// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА
 let myPlayerName = localStorage.getItem('flappy_device_name_v10');
 if (!myPlayerName) {
     let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
@@ -72,14 +72,8 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v10', myPlayerName);
 }
 
-// ИНИЦИАЛИЗАЦИЯ СВЕРХСТАБИЛЬНОГО СЕРВЕРА PUBNUB С ДЕМО-КЛЮЧАМИ
-const pubnub = new PubNub({
-    publishKey: 'pub-c-8178d8a7-96a8-48bc-b27b-edda0c0e86b0',
-    subscribeKey: 'sub-c-e36dc404-b903-11ea-8a56-2e23d7063aa7',
-    uuid: myPlayerName
-});
-
-let isHost = false, myRoomId = "";
+// ПЕРЕМЕННЫЕ СЕТИ ИНИЦИАЛИЗИРУЮТСЯ СТРОГО В NULL ДЛЯ ЗАЩИТЫ ОТ КРАШЕЙ
+let pubnub = null, isHost = false, myRoomId = "";
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -123,7 +117,7 @@ function getSkyColor() { return "rgb(112, 197, 206)"; }
 
 const birdMapRaw = ["00000111111000000", "00001222222110000", "00112222221331000", "01225522213113100", "12222552213113100", "12222222221331000", "12222222222111100", "1222222224444410", "0122222241111410", "0011222441114100", "0000114444441000", "0000001111110000"];
 
-// АБСОЛЮТНО ЖЕСТКАЯ ИЗОЛЯЦИЯ: currentSkin — это одиночный независимый объект [1]
+// АБСОЛЮТНО ЖЕСТКАЯ ИЗОЛЯЦИЯ ОТ ОШИБОК МАССИВА
 let currentSkin = {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true};
 
 const allShopSkins = [
@@ -160,17 +154,17 @@ function fetchOnlineLeaderboard() {
     }
 }
 
-// РАБОТА С СЕТЬЮ PUBNUB
+// ЗАЩИЩЕННАЯ СИСТЕМА ПОДКЛЮЧЕНИЯ К СЕТИ
 window.createNewServerRoom = function() {
-    initAudio(); isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
+    initAudio(); if (!pubnub) return alert("Сеть ещё подключается, подождите 2 секунды...");
+    isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     
-    // Публикуем создание комнаты в глобальный эфир
     pubnub.publish({
         channel: 'flappy_mmo_global_stream',
         message: { type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id }
-    });
+    }, (status, response) => { if (status.error) console.error("Ошибка отправки лобби:", status); });
 }
 
 window.joinServerRoom = function(roomId) {
@@ -180,74 +174,70 @@ window.joinServerRoom = function(roomId) {
     enemyBird.active = true;
 }
 
-// ПОДПИСКА НА СЕТЕВЫЕ СОБЫТИЯ И ОБНОВЛЕНИЕ ЛОББИ
 function initNetwork() {
+    if (typeof PubNub === "undefined") { 
+        console.warn("Сетевой плагин PubNub ещё загружается...");
+        document.getElementById("mp-status").innerHTML = "Подключение к сети...";
+        return; 
+    }
+    
+    // Безопасное создание экземпляра
+    pubnub = new PubNub({
+        publishKey: 'pub-c-8178d8a7-96a8-48bc-b27b-edda0c0e86b0',
+        subscribeKey: 'sub-c-e36dc404-b903-11ea-8a56-2e23d7063aa7',
+        uuid: myPlayerName,
+        ssl: true
+    });
+
     pubnub.subscribe({ channels: ['flappy_mmo_global_stream'] });
     document.getElementById("mp-status").innerHTML = "🟢 СЕТЬ АКТИВНА!";
 
     pubnub.addListener({
         message: function(event) {
             const msg = event.message;
-            const container = document.getElementById("rooms-list");
-            if (!container) return;
+            const container = document.getElementById("rooms-list"); if (!container) return;
 
-            // Обработка создания комнат в эфире
             if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
                 if (document.getElementById(msg.roomId)) return;
                 let div = document.createElement("div"); div.id = msg.roomId; div.className = "room-item";
                 div.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
                 container.appendChild(div);
-                
-                // Удаляем комнату из списка через 10 секунд автоочисткой
-                setTimeout(() => { if(document.getElementById(msg.roomId)) document.getElementById(msg.roomId).remove(); }, 10000);
+                setTimeout(() => { if(document.getElementById(msg.roomId)) document.getElementById(msg.roomId).remove(); }, 12000);
             }
 
-            // Обработка игрового процесса дуэли
             if (myRoomId && msg.roomId === myRoomId && msg.sender !== myPlayerName) {
                 if (msg.type === 'game_sync') {
-                    enemyBird.active = true;
-                    enemyBird.y = msg.y;
-                    enemyBird.currentSkinId = msg.skin;
+                    enemyBird.active = true; enemyBird.y = msg.y; enemyBird.currentSkinId = msg.skin;
                     if (!isHost && msg.pipes) pipes = JSON.parse(msg.pipes);
                 }
             }
-        },
-        presence: function(event) {
-            // Обновление списка игроков онлайн на сайте
-            pubnub.hereNow({ channels: ['flappy_mmo_global_stream'] }, function(status, response) {
-                const container = document.getElementById("rooms-list"); if (!container) return;
-                // Очищаем только старые отметки онлайна
-                document.querySelectorAll(".online-user-item").forEach(el => el.remove());
-                
-                if (response && response.channels && response.channels['flappy_mmo_global_stream']) {
-                    response.channels['flappy_mmo_global_stream'].occupants.forEach(user => {
-                        let div = document.createElement("div"); div.className = "room-item online-user-item";
-                        div.innerHTML = `<span style="color:#00ff00">● ${user.uuid}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
-                        container.insertBefore(div, container.firstChild);
-                    });
-                }
-            });
         }
     });
 
-    // Отправляем сигнал о своем входе в сеть
-    pubnub.publish({ channel: 'flappy_mmo_global_stream', message: { type: 'ping', sender: myPlayerName } });
+    // Регулярный запрос списка игроков онлайн
+    setInterval(() => {
+        if (!pubnub) return;
+        pubnub.hereNow({ channels: ['flappy_mmo_global_stream'] }, function(status, response) {
+            const container = document.getElementById("rooms-list"); if (!container) return;
+            document.querySelectorAll(".online-user-item").forEach(el => el.remove());
+            if (response && response.channels && response.channels['flappy_mmo_global_stream']) {
+                response.channels['flappy_mmo_global_stream'].occupants.forEach(user => {
+                    let div = document.createElement("div"); div.className = "room-item online-user-item";
+                    div.innerHTML = `<span style="color:#00ff00">● ${user.uuid}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
+                    container.insertBefore(div, container.firstChild);
+                });
+            }
+        });
+    }, 4000);
 }
 
-// Пакетная передача координат во время полёта
+// Безопасный стрим координат без падения движка
 setInterval(() => {
-    if (!myRoomId) return;
+    if (!myRoomId || !pubnub) return;
     pubnub.publish({
         channel: 'flappy_mmo_global_stream',
-        message: {
-            type: 'game_sync',
-            roomId: myRoomId,
-            sender: myPlayerName,
-            y: bird.y,
-            skin: currentSkin.id,
-            pipes: isHost ? JSON.stringify(pipes) : null
-        }
-    });
+        message: { type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null }
+    }, (status) => {});
 }, 50);
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
@@ -255,6 +245,7 @@ function drawPixelRect(x, y, w, h, fillColor) {
 }
 
 function drawPixelBird(bx, by, skinId) {
+    // ЖЕСТКИЙ ФИКС: Запасным вариантом берется строго первый объект утки под индексом 0, а не массив целиком!
     let targetSkin = allShopSkins.find(s => s.id === skinId) || allShopSkins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
@@ -349,7 +340,12 @@ function draw() {
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
 resetGame(); loop();
-window.addEventListener("load", () => { updateShopUI(); initNetwork(); });
+window.addEventListener("load", () => { 
+    updateShopUI(); 
+    fetchOnlineLeaderboard();
+    // БЕЗОПАСНЫЙ ЗАПУСК СЕТИ: Даем игре 1 секунду на отрисовку графики, а потом мягко включаем онлайн
+    setTimeout(() => { initNetwork(); }, 1000); 
+});
 </script>
 </body>
 </html>
