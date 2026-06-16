@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Attack Freddy</title>
+    <title>Flappy Bird MMO: Bonnie Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -115,7 +115,7 @@ const skins = [
     {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true},
     {id: 'cyber', name: 'Cyber Agent', color: '#00e5ff', beak: '#ff007f', hat: false, price: 50, purchased: false},
     {id: 'pirate', name: 'Pirate Bird', color: '#4e342e', beak: '#ffb300', hat: true, price: 100, purchased: false},
-    {id: 'freddy', name: 'Attack Freddy', color: '#6d4c41', beak: '#3e2723', hat: true, price: 15, purchased: false},
+    {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
 let currentSkin = skins[0]; // Жесткая фиксация базовой утки
@@ -264,7 +264,7 @@ function drawPixelRect(x, y, w, h, fillColor) {
 }
 
 function drawPixelBird(bx, by, skinId) {
-    let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
+    let targetSkin = skins.find(s => s.id === skinId) || skins; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
             let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
@@ -274,34 +274,25 @@ function drawPixelBird(bx, by, skinId) {
         }
     }
     
-    // ЭФФЕКТ ДЛЯ ВСЕХ ПТИЦ: УВЕЛИЧЕННЫЕ МАССИВНЫЕ КРЫЛЬЯ
-    ctx.fillStyle = "#fff"; 
-    ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 10), 10, 4); 
-    ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 12), 12, 4); 
-    ctx.fillStyle = "#000";
-    ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 10), 2, 6);
-    ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 12), 2, 4);
+    // МАССИВНЫЕ КРЫЛЬЯ С КРАСИВОЙ ЧЁРНОЙ ОКАНТОВКОЙ И ВНУТРЕННИМ БЛИКОМ
+    ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 0), Math.floor(by + 8), 14, 8); 
+    ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 10), 10, 4); 
+    ctx.fillStyle = "#aaa"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 12), 6, 2); 
 
-    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ МИШКА ФРЕДДИ (СМОТРИТ НАПРАВО)
+    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ КРОЛИК БОННИ (СМОТРИТ НАПРАВО, В СТОРОНУ ПОЛЁТА)
     if (targetSkin.id === 'freddy') {
-        // Стираем текстуру утиного клюва коричневым цветом головы
-        ctx.fillStyle = targetSkin.color; ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 10), 8, 10);
-        // Красивые объёмные ушки с тёмно-коричневой сердцевиной
-        drawPixelRect(bx + 2, by - 6, 8, 8, "#6d4c41"); drawPixelRect(bx + 4, by - 4, 4, 4, "#4e342e"); 
-        drawPixelRect(bx + 24, by - 6, 8, 8, "#6d4c41"); drawPixelRect(bx + 26, by - 4, 4, 4, "#4e342e"); 
-        // Каноничный маленький чёрный цилиндр на макушке
-        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 10), 18, 4); 
-        ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 20), 10, 10); 
-        // Большие выразительные глаза (Чёрный контур + Голубая радужка + Белый зрачок)
-        drawPixelRect(bx + 10, by + 2, 8, 8, "#fff"); ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 4, 6); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 4), 2, 4);
-        drawPixelRect(bx + 22, by + 2, 8, 8, "#fff"); ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 4), 4, 6); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 28), Math.floor(by + 4), 2, 4);
-        // Объёмная круглая мордочка с точками усов
-        drawPixelRect(bx + 12, by + 10, 18, 8, "#d7ccc8"); 
-        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 10), 4, 3); // Носик
-        ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 10), 2, 1); // Блик на носу
-        ctx.fillStyle = "#3e2723"; ctx.fillRect(Math.floor(bx + 15), Math.floor(by + 14), 2, 2); ctx.fillRect(Math.floor(bx + 18), Math.floor(by + 13), 2, 2); // Точки усов
-        // Аккуратный чёрный галстук-бабочка на груди
-        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 12), Math.floor(by + 24), 12, 4); ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 22), 4, 6);
+        ctx.fillStyle = "#673ab7"; ctx.fillRect(Math.floor(bx), Math.floor(by), 34, 24);
+        ctx.fillStyle = "#000"; ctx.strokeRect(Math.floor(bx), Math.floor(by), 34, 24);
+        
+        ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
+        ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 6), 2, 4); ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 6), 2, 4);
+        
+        // Длинные фиолетовые уши кролика со светлой сердцевиной
+        drawPixelRect(bx + 4, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 6, by - 10, 2, 8, "#b39ddb"); 
+        drawPixelRect(bx + 18, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 20, by - 10, 2, 8, "#b39ddb"); 
+        
+        // Аккуратная серая мордочка и черный круглый нос
+        drawPixelRect(bx + 14, by + 12, 14, 8, "#e0e0e0"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 12), 4, 3); 
     }
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 4), 20, 4); ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 14), 12, 10);
@@ -335,17 +326,19 @@ function update() {
 function draw() {
     ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
     if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }
+    
     pipes.forEach(p => { 
         drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), 0, 2, Math.floor(p.top));
         drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 2, 20);
         let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(bTop));
         drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);
     });
+
     ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);
     if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }
 }
 function loop() { update(); draw(); requestAnimationFrame(loop); }
-currentSkin = skins[0]; resetGame(); loop();
+currentSkin = skins; resetGame(); loop();
 </script>
 </body>
 </html>
