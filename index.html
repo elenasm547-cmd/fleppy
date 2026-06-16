@@ -160,7 +160,6 @@ window.startHost = function() {
     localConnection = new RTCPeerConnection(configuration);
     dataChannel = localConnection.createDataChannel("gameChannel"); setupChannelListeners();
     
-    // ЖЕСТКАЯ ПОДSTPAXOBKA: Выводим QR через 200мс в любом случае, обходя зависания сбора ICE
     let forceShowQR = setTimeout(() => { triggerTokenDisplay(); }, 200);
     
     localConnection.onicecandidate = e => { 
@@ -172,7 +171,10 @@ window.startHost = function() {
 function triggerTokenDisplay() {
     if (document.getElementById("mp-status").innerHTML === "Комната создана! Ожидание...") return;
     let token = btoa(JSON.stringify(localConnection.localDescription));
-    let gameLink = window.location.origin + window.location.pathname + "?join=" + token;
+    
+    // СВЕРХТОЧНОЕ ИСПРАВЛЕНИЕ: берем строго первый элемент массива, убирая запятые
+    let cleanUrl = window.location.href.split('?');
+    let gameLink = cleanUrl[0] + "?join=" + token;
 
     document.getElementById("mp-area").innerHTML = `
         <span style="font-size:10px;color:#aaa;">1. Наведи телефон на QR-код для быстрого входа:</span>
@@ -274,7 +276,7 @@ function drawPixelRect(x, y, w, h, fillColor) {
 }
 
 function drawPixelBird(bx, by, skinId) {
-    let targetSkin = skins.find(s => s.id === skinId) || skins; let pSize = 2;
+    let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
             let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
@@ -299,9 +301,11 @@ function drawPixelBird(bx, by, skinId) {
         ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
         ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 6), 2, 4); ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 6), 2, 4);
         
+        // Длинные фиолетовые уши кролика со светлой сердцевиной
         drawPixelRect(bx + 4, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 6, by - 10, 2, 8, "#b39ddb"); 
         drawPixelRect(bx + 18, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 20, by - 10, 2, 8, "#b39ddb"); 
         
+        // Аккуратная серая мордочка и черный нос
         drawPixelRect(bx + 14, by + 12, 14, 8, "#e0e0e0"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 12), 4, 3); 
     }
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
@@ -318,7 +322,7 @@ canvas.addEventListener("mousedown", () => { handleJump(); canvas.focus(); }); c
 
 function update() {
     if (dataChannel && dataChannel.readyState === "open") {
-        dataChannel.send(JSON.stringify({type: 'fly', y: bird.y, skin: currentSkin.id}));
+        dataChannel.send(JSON.stringify({type: 'fly', y: bird.y, skin: currentSkin[0].id}));
         if (isHost && pipes.length > 0) dataChannel.send(JSON.stringify({type: 'pipe', pipes: JSON.stringify(pipes)}));
     }
     if (gameOver) {
@@ -334,7 +338,7 @@ function update() {
 }
 
 function draw() {
-    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
+    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin[0].id);
     if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }
     
     pipes.forEach(p => { 
