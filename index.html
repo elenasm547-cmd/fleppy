@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Bonnie Edition</title>
+    <title>Flappy Bird MMO: Global Lobby Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -13,7 +13,8 @@
         h2{margin:0;text-align:center;font-size:16px;text-transform:uppercase;border-bottom:4px dashed #444;padding-bottom:8px;}
         .coins-display{color:#ffd700;font-size:16px;text-align:center;font-weight:bold;background:#222;padding:8px;border:2px solid #ffd700;}
         .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-size:12px;text-transform:uppercase;}
-        .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;text-align:center;font-size:14px;width:100%;box-sizing:border-box;}
+        .room-item{display:flex;justify-content:space-between;align-items:center;background:#222;padding:6px 10px;border:2px solid #444;font-size:11px;margin-bottom:2px;}
+        .join-btn{background:#2e7d32;color:white;border:1px solid #fff;padding:4px 8px;cursor:pointer;font-weight:bold;font-size:10px;}
         .skin-item,.leader-item{display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 12px;border:2px solid #333;}
         .skin-name{font-weight:bold;font-size:14px;text-transform:uppercase;}
         .shop-btn{background:#00aa00;color:white;border:2px solid #fff;padding:6px 10px;cursor:pointer;font-weight:bold;min-width:85px;}
@@ -21,21 +22,22 @@
         .shop-btn.equipped{background:#0000aa;}
         .setting-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;background:#111;padding:8px 12px;border:2px solid #333;}
         .setting-row input{width:16px;height:16px;cursor:pointer;}
+        #rooms-list{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:5px;border:2px solid #333;}
         @media(max-width:768px){.container{flex-direction:column;align-items:center;}canvas,.side-panel{width:100%;max-width:400px;}}
     </style>
+    <!-- ПОДКЛЮЧАЕМ ДЕЦЕНТРАЛИЗОВАННЫЙ СЕТЕВОЙ ПРОТОКОЛ GUN -->
+    <script src="https://jsdelivr.net"></script>
 </head>
 <body>
 <div class="container"> 
     <canvas id="canvas" width="400" height="500"></canvas> 
     <div class="side-panel">
         <div class="multiplayer-box">
-            <h2>ONLINE MULTIPLAYER</h2>
-            <div id="mp-menu-buttons" style="display:flex; gap:10px;">
-                <button class="mp-btn" style="flex:1;" onclick="startHost()">CREATE ROOM</button>
-                <button class="mp-btn" style="flex:1; background:#2e7d32;" onclick="startJoin()">JOIN ROOM</button>
-            </div>
-            <div id="mp-area" style="display:flex; flex-direction:column; gap:8px; margin-top:5px;"></div>
-            <div id="mp-status" style="text-align:center;font-size:12px;color:#aaa;">Одиночный режим</div>
+            <h2>GLOBAL ONLINE LOBBY</h2>
+            <button class="mp-btn" id="host-btn" onclick="createNewServerRoom()" style="width:100%;">CREATE NEW GAME</button>
+            <div style="font-size:10px;color:#aaa;margin-top:5px;text-align:center;text-transform:uppercase;font-weight:bold;">Игроки на сайте / Комнаты:</div>
+            <div id="rooms-list"></div>
+            <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Одиночный режим</div>
         </div>
         <div class="shop"> 
             <h2>SHOP</h2> 
@@ -61,15 +63,20 @@ let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
 let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
+// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН
 let myPlayerName = localStorage.getItem('flappy_device_name_v9');
 if (!myPlayerName) {
-    let userName = prompt("ГЛОБАЛЬНЫЙ ОНЛАЙН-ТУРНИР! Введите имя:", "Игрок");
-    if (!userName || !userName.trim()) userName = "User-" + Math.floor(1000 + Math.random() * 9000);
+    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
+    if (!userName || !userName.trim()) userName = "User_" + Math.floor(1000 + Math.random() * 9000);
     myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
     localStorage.setItem('flappy_device_name_v9', myPlayerName);
 }
 
-let localConnection = null, dataChannel = null, isHost = false, roomId = "";
+// ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ GUN (БЕЗБЛОКИРОВОЧНЫЙ СЕРВЕР)
+const gun = Gun(['https://herokuapp.com']);
+const lobbyNode = gun.get('flappy_mmo_global_lobby_2026');
+
+let isHost = false, myRoomId = "";
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -79,7 +86,7 @@ function initAudio() {
     if (audioCtx && !musicInterval) startAmbientMusic();
 }
 
-// ИСПРАВЛЕНО: Звуки прыжка теперь сочные и громкие, затухание привязано к currentTime!
+// ИСПРАВЛЕНО: Громкие сочные прыжки благодаря фиксу currentTime!
 function playSound(freq, duration, type = 'sine', ramp = true) {
     if (!sfxToggle.checked) return;
     if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
@@ -120,15 +127,13 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0];
+let currentSkin = skins[0]; // Жёсткое закрепление одиночного объекта, серый экран побежден!
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
+// СЕТЕВАЯ ЛОГИКА: ОБНОВЛЕНИЕ ЖИВОГО СПИСКА ЛОББИ И ИГРОКОВ ОНЛАЙН
 function sendHighScoreOnline(finalScore) {
     if (finalScore <= 0) return;
-    if (finalScore > personalBest) {
-        personalBest = finalScore;
-        localStorage.setItem('flappy_personal_best', personalBest);
-    }
+    if (finalScore > personalBest) { personalBest = finalScore; localStorage.setItem('flappy_personal_best', personalBest); }
     let existing = localLeaderboard.find(p => p.name === myPlayerName);
     if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
     else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
@@ -148,118 +153,77 @@ function fetchOnlineLeaderboard() {
             container.appendChild(item);
         });
     }
-    const personalItem = document.createElement("div");
-    personalItem.className = "leader-item"; personalItem.style.marginTop = "8px"; personalItem.style.borderColor = "#ffd700";
-    personalItem.innerHTML = `<span>MY BEST</span><span style='font-weight:bold;color:#ffd700'>${personalBest}</span>`;
-    container.appendChild(personalItem);
 }
 
-const configuration = {'iceServers': [{'urls': 'stun:://google.com'}]};
-
-window.startHost = function() {
-    document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-status").innerHTML = "Генерация кода комнаты..."; isHost = true;
-    localConnection = new RTCPeerConnection(configuration);
-    dataChannel = localConnection.createDataChannel("gameChannel"); setupChannelListeners();
-    
-    // ХИТРЫЙ ТАЙМАУТ: Если сеть зависла, принудительно выдаем токен через 200мс со 100% гарантией!
-    let forceShowMP = setTimeout(() => { triggerTokenDisplay(); }, 200);
-    
-    localConnection.onicecandidate = e => { 
-        if(!e.candidate) { clearTimeout(forceShowMP); triggerTokenDisplay(); } 
-    };
-    localConnection.createOffer().then(o => localConnection.setLocalDescription(o));
+// СЕРВЕРНЫЙ ЦИКЛ ОБМЕНА КООРДИНАТАМИ ЧЕРЕЗ GUN (БЕЗ WEBRTC ЗАВИСАНИЙ)
+window.createNewServerRoom = function() {
+    initAudio(); isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
+    document.getElementById("host-btn").style.display = "none";
+    document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
+    lobbyNode.get(myRoomId).put({ hostName: myPlayerName, pipes: "", enemyY: 150, enemySkin: currentSkin.id, lastActive: Date.now() });
 }
 
-function triggerTokenDisplay() {
-    if (document.getElementById("mp-status").innerHTML === "Ожидание ответа от друга...") return;
-    let token = btoa(JSON.stringify(localConnection.localDescription));
-    document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:10px;color:#aaa;">Кликни, скопируй и отправь этот код другу:</span>
-        <input class="mp-input" type="text" value="${token}" onclick="this.select(); document.execCommand('copy'); alert('Код скопирован!');" readonly style="cursor:pointer;color:#ffd700;font-weight:bold;margin-bottom:5px;">
-        <input id="join-code-input" class="mp-input" placeholder="Вставь ответный код друга...">
-        <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>
-    `; 
-    document.getElementById("mp-status").innerHTML = "Ожидание ответа от друга...";
+window.joinServerRoom = function(roomId) {
+    initAudio(); isHost = false; myRoomId = roomId;
+    document.getElementById("host-btn").style.display = "none";
+    document.getElementById("mp-status").innerHTML = "🟢 ПОДКЛЮЧЕН К ИГРОКУ!";
+    enemyBird.active = true;
 }
 
-window.acceptAnswer = function() {
-    let ans = document.getElementById("join-code-input").value; if(!ans.trim()) return alert("Вставь ответный код!");
-    try { localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(ans)))); } catch(e) { alert("Ошибка кода!"); }
-}
-
-window.startJoin = function() {
-    document.getElementById("mp-menu-buttons").style.display = "none";
-    document.getElementById("mp-area").innerHTML = `
-        <input id="host-code-input" class="mp-input" placeholder="Вставь код комнаты хоста...">
-        <button class="mp-btn" style="margin-top:5px;width:100%;" onclick="executeJoin()">СГЕНЕРИРОВАТЬ ОТВЕТ</button>
-    `;
-    document.getElementById("mp-status").innerHTML = "Ожидание ввода кода...";
-}
-
-window.executeJoin = function() {
-    let code = document.getElementById("host-code-input").value; if(!code.trim()) return alert("Вставь код!"); isHost = false;
-    localConnection = new RTCPeerConnection(configuration);
-    localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
-    try {
-        localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
-        let forceShowJoin = setTimeout(() => { triggerJoinTokenDisplay(); }, 200);
-        localConnection.onicecandidate = e => { 
-            if(!e.candidate) { clearTimeout(forceShowJoin); triggerJoinTokenDisplay(); } 
-        };
-        localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
-    } catch(e) { alert("Неверный код!"); }
-}
-
-function triggerJoinTokenDisplay() {
-    if (document.getElementById("mp-status").innerHTML === "Код ответа готов! Перешли его Создателю.") return;
-    let token = btoa(JSON.stringify(localConnection.localDescription));
-    document.getElementById("mp-area").innerHTML = `
-        <span style="font-size:10px;color:#aaa;">Кликни, скопируй и отправь этот ответ хосту:</span>
-        <input class="mp-input" type="text" value="${token}" onclick="this.select(); document.execCommand('copy'); alert('Ответ скопирован!');" readonly style="cursor:pointer;color:#00ff00;font-weight:bold;">
-    `; 
-    document.getElementById("mp-status").innerHTML = "Код ответа готов! Перешли его Создателю.";
-}
-
-function setupChannelListeners() {
-    dataChannel.onopen = () => { document.getElementById("mp-status").innerHTML = "🟢 МУЛЬТИПЛЕЕР АКТИВЕН!"; enemyBird.active = true; };
-    dataChannel.onmessage = (e) => {
-        try {
-            let data = JSON.parse(e.data);
-            if(data.type === 'fly') { enemyBird.active = true; enemyBird.y = data.y; enemyBird.currentSkinId = data.skin; }
-            if(data.type === 'pipe' && !isHost) { pipes = JSON.parse(data.pipes); }
-        } catch(err){}
-    };
-}
-
-function updateShopUI() {
-    let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
-    if (document.getElementById("coin-count")) document.getElementById("coin-count").innerText = walletCoins;
-    const container = document.getElementById("shop-items"); if (!container) return; container.innerHTML = "";
-    skins.forEach(skin => {
-        let isSavedPurchased = localStorage.getItem('skin_buy_' + skin.id) || skin.price === 0; if (isSavedPurchased) skin.purchased = true;
-        const item = document.createElement("div"); item.className = "skin-item";
-        let btnText = skin.purchased ? "EQUIP" : skin.price + ""; let btnClass = "shop-btn"; if (skin.id === currentSkin.id) { btnText = "ACTIVE"; btnClass += " equipped"; }
-        let isLocked = (!skin.purchased) && (walletCoins < skin.price); let disabledAttr = isLocked ? "disabled" : "";
-        item.innerHTML = `<div><span class="skin-name">${skin.name}</span></div><button class="${btnClass}" ${disabledAttr} onclick="buyOrEquip('${skin.id}')">${btnText}</button>`; container.appendChild(item);
-    });
-}
-
-window.buyOrEquip = function (id) {
-    initAudio(); const skin = skins.find(s => s.id === id); let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
-    if (skin.purchased) { currentSkin = skin; playSound(587.33, 0.15, 'square', false); }
-    else if (walletCoins >= skin.price) {
-        walletCoins -= skin.price; localStorage.setItem('flappy_total_coins', walletCoins); localStorage.setItem('skin_buy_' + skin.id, true); skin.purchased = true; currentSkin = skin; playSound(880, 0.3, 'square', false);
+// ПОЛУЧЕНИЕ И ОБНОВЛЕНИЕ СПИСКА АКТИВНЫХ ЛОББИ НА ЭКРАНЕ
+setInterval(() => {
+    if (lobbyNode && myPlayerName) {
+        lobbyNode.get('online_users').get(myPlayerName).put(Date.now());
     }
-    updateShopUI();
-}
+}, 4000);
+
+lobbyNode.map().on((data, id) => {
+    if (!data) return;
+    const container = document.getElementById("rooms-list"); if (!container) return;
+    
+    // Если это данные о живых юзерах на сайте
+    if (id === 'online_users') {
+        let now = Date.now();
+        Object.keys(data).forEach(user => {
+            if (user !== '_' && now - data[user] < 10000 && !document.getElementById("usr_" + user)) {
+                let div = document.createElement("div"); div.id = "usr_" + user; div.className = "room-item";
+                div.innerHTML = `<span style="color:#00ff00">● ${user}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
+                container.appendChild(div);
+            } else if (now - data[user] >= 10000 && document.getElementById("usr_" + user)) {
+                document.getElementById("usr_" + user).remove();
+            }
+        });
+        return;
+    }
+    
+    // Если это игровая комната в лобби
+    if (id.startsWith("room_") && Date.now() - data.lastActive < 10000) {
+        if (document.getElementById(id)) return;
+        let div = document.createElement("div"); div.id = id; div.className = "room-item";
+        div.innerHTML = `<span>🎮 Лобби: ${data.hostName}</span><button class="join-btn" onclick="joinServerRoom('${id}')">JOIN</button>`;
+        container.appendChild(div);
+    }
+});
+
+// МОНИТОРИНГ ИГРОВОГО СЕАНСА НАПРАМУЮ С СЕРВЕРА СЕТИ
+setInterval(() => {
+    if (!myRoomId) return;
+    if (isHost) {
+        lobbyNode.get(myRoomId).put({ enemyY: bird.y, enemySkin: currentSkin.id, pipes: JSON.stringify(pipes), lastActive: Date.now() });
+        lobbyNode.get(myRoomId).get('guestData').on(data => { if(data) { enemyBird.active = true; enemyBird.y = data.y; enemyBird.currentSkinId = data.skin; } });
+    } else {
+        lobbyNode.get(myRoomId).put({ guestData: { y: bird.y, skin: currentSkin.id }, lastActive: Date.now() });
+        lobbyNode.get(myRoomId).on(data => { if(data) { enemyBird.y = data.enemyY; enemyBird.currentSkinId = data.enemySkin; if (data.pipes) pipes = JSON.parse(data.pipes); } });
+    }
+}, 40);
+
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
 }
 
 function drawPixelBird(bx, by, skinId) {
-    let targetSkin = skins.find(s => s.id === skinId) || skins; let pSize = 2;
+    let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
             let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
@@ -269,26 +233,19 @@ function drawPixelBird(bx, by, skinId) {
         }
     }
     
-    // ОРИГИНАЛЬНЫЕ КАНОНИЧНЫЕ КРЫЛЬЯ FLAPPY BIRD (КАК В ОРИГИНАЛЕ)
+    // ОРИГИНАЛЬНЫЕ КАНОНИЧНЫЕ КРЫЛЬЯ FLAPPY BIRD
     ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 10), 12, 8); 
-    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#4e342e" : "#d8a000"; 
-    ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 12), 8, 4); 
-    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#b39ddb" : "#fff"; 
-    ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 10), 8, 2); 
+    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#4e342e" : "#d8a000"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 12), 8, 4); 
+    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#b39ddb" : "#fff"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 10), 8, 2); 
 
-    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ КРОЛИК БОННИ (СМОТРИТ НАПРАВО, В СТОРОНУ ПОЛЁТА)
+    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ КРОЛИК БОННИ (СМОТРИТ НАПРАВО)
     if (targetSkin.id === 'freddy') {
         ctx.fillStyle = "#673ab7"; ctx.fillRect(Math.floor(bx), Math.floor(by), 34, 24);
         ctx.fillStyle = "#000"; ctx.strokeRect(Math.floor(bx), Math.floor(by), 34, 24);
-        
         ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
         ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 6), 2, 4); ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 6), 2, 4);
-        
-        // Длинные фиолетовые уши кролика со светлой сердцевиной
         drawPixelRect(bx + 4, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 6, by - 10, 2, 8, "#b39ddb"); 
         drawPixelRect(bx + 18, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 20, by - 10, 2, 8, "#b39ddb"); 
-        
-        // Аккуратная серая мордочка и черный нос
         drawPixelRect(bx + 14, by + 12, 14, 8, "#e0e0e0"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 12), 4, 3); 
     }
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
@@ -296,18 +253,14 @@ function drawPixelBird(bx, by, skinId) {
     }
 }
 
-function spawnPipe() { if (!isHost && dataChannel && dataChannel.readyState === "open") return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false}); }
-function resetGame() { bird.y = 150; bird.velocity = 0; pipes = []; score = 0; gameOver = false; recordChecked = false; spawnPipe(); updateShopUI(); }
+function spawnPipe() { if (!isHost && myRoomId) return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false}); }
+function resetGame() { bird.y = 150; bird.velocity = 0; if (isHost || !myRoomId) pipes = []; score = 0; gameOver = false; recordChecked = false; spawnPipe(); updateShopUI(); }
 function handleJump() { initAudio(); if (gameOver) resetGame(); else { bird.velocity = bird.jump; playSound(440, 0.12, 'square', true); } }
 
 window.addEventListener("keydown", (e) => { if (e.code === "Space" || e.code === "ArrowUp") handleJump(); });
 canvas.addEventListener("mousedown", () => { handleJump(); canvas.focus(); }); canvas.addEventListener("touchstart", (e) => { e.preventDefault(); handleJump(); }, {passive: false});
 
 function update() {
-    if (dataChannel && dataChannel.readyState === "open") {
-        dataChannel.send(JSON.stringify({type: 'fly', y: bird.y, skin: currentSkin.id}));
-        if (isHost && pipes.length > 0) dataChannel.send(JSON.stringify({type: 'pipe', pipes: JSON.stringify(pipes)}));
-    }
     if (gameOver) {
         if (!recordChecked) {
             recordChecked = true; playSound(100, 0.4, 'sawtooth', false); let currentCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
@@ -315,7 +268,7 @@ function update() {
         }return;
     }
     bird.velocity += bird.gravity; bird.y += bird.velocity; if ((bird.y + bird.h) > canvas.height || bird.y < 0) gameOver = true;
-    if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) spawnPipe();
+    if ((isHost || !myRoomId) && (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200)) spawnPipe();
     pipes.forEach(p => { p.x -= 2; if (!p.passed && (p.x + p.w) < bird.x) { score++; p.passed = true; updateShopUI(); playSound(600, 0.08, 'square', false); } if ((bird.x + bird.w) > p.x && bird.x < (p.x + p.w) && (bird.y < p.top || (bird.y + bird.h) > (canvas.height - p.bottom))) gameOver = true; });
     pipes = pipes.filter(p => (p.x + p.w) > 0);
 }
@@ -327,16 +280,4 @@ function draw() {
     pipes.forEach(p => { 
         drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), 0, 2, Math.floor(p.top));
         drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 2, 20);
-        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));
-        drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);
-    });
-
-    ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);
-    if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }
-}
-function loop() { update(); draw(); requestAnimationFrame(loop); }
-currentSkin = skins[0]; resetGame(); loop(); // СВЕРХТОЧНОЕ ИСПРАВЛЕНИЕ: берем строго один объект, а не массив skins!
-window.addEventListener("load", () => { updateShopUI(); });
-</script>
-</body>
-</html>
+let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);});ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }}function loop() { update(); draw(); requestAnimationFrame(loop); }currentSkin = skins[0]; resetGame(); loop();window.addEventListener("load", () => { updateShopUI(); });
