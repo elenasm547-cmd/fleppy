@@ -120,7 +120,7 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-// ЖЁСТКИЙ ИСПРАВЛЕННЫЙ БЛОК: Вытаскиваем строго один объект, а не весь массив
+// ИСПРАВЛЕНО НАМЕРТВО: Привязываем объект первой утки, а не весь массив целиком!
 let currentSkin = skins[0]; 
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
@@ -220,7 +220,7 @@ function drawPixelRect(x, y, w, h, fillColor) {
 }
 
 function drawPixelBird(bx, by, skinId) {
-    // ЖЕСТКИЙ ФИКС: Запасным вариантом берется строго объект skins[0], а не весь массив целиком!
+    // ИСПРАВЛЕНО НАМЕРТВО: Запасным вариантом берется строго объект утки под индексом 0, а не массив целиком!
     let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
@@ -298,6 +298,7 @@ function loadFirebaseScripts() {
     document.body.appendChild(s1);
 }
 
+// ИСПРАВЛЕНО НАМЕРТВО: Присваиваем объект первой классической утки skins[0], а не массив!
 currentSkin = skins[0]; resetGame(); loop();
 window.addEventListener("load", () => { updateShopUI(); loadFirebaseScripts(); });
 </script>
