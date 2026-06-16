@@ -118,7 +118,7 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0]; // Жесткая фиксация базовой утки
+let currentSkin = skins;
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -159,11 +159,18 @@ window.startHost = function() {
     document.getElementById("mp-status").innerHTML = "Создание комнаты..."; isHost = true;
     localConnection = new RTCPeerConnection(configuration);
     dataChannel = localConnection.createDataChannel("gameChannel"); setupChannelListeners();
-    localConnection.onicecandidate = e => { if(!e.candidate) { triggerTokenDisplay(); } };
+    
+    // ЖЕСТКАЯ ПОДSTPAXOBKA: Выводим QR через 200мс в любом случае, обходя зависания сбора ICE
+    let forceShowQR = setTimeout(() => { triggerTokenDisplay(); }, 200);
+    
+    localConnection.onicecandidate = e => { 
+        if(!e.candidate) { clearTimeout(forceShowQR); triggerTokenDisplay(); } 
+    };
     localConnection.createOffer().then(o => localConnection.setLocalDescription(o));
 }
 
 function triggerTokenDisplay() {
+    if (document.getElementById("mp-status").innerHTML === "Комната создана! Ожидание...") return;
     let token = btoa(JSON.stringify(localConnection.localDescription));
     let gameLink = window.location.origin + window.location.pathname + "?join=" + token;
 
@@ -196,12 +203,14 @@ window.executeJoin = function() {
     localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
     try {
         localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(code))));
-        localConnection.onicecandidate = e => { if(!e.candidate) { triggerJoinTokenDisplay(); } };
+        let forceShowJoin = setTimeout(() => { triggerJoinTokenDisplay(); }, 200);
+        localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(forceShowJoin); triggerJoinTokenDisplay(); } };
         localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
     } catch(e) { alert("Неверный код!"); }
 }
 
 function triggerJoinTokenDisplay() {
+    if (document.getElementById("mp-status").innerHTML === "Код ответа готов! Вставь его на ПК.") return;
     let token = btoa(JSON.stringify(localConnection.localDescription));
     document.getElementById("mp-area").innerHTML = `
         <span style="font-size:10px;color:#aaa;">Перепиши или скопируй эти 6 символов ответа на ПК:</span>
@@ -209,7 +218,7 @@ function triggerJoinTokenDisplay() {
         <span style="font-size:9px;color:#666;margin-top:4px;">Полный технический токен:</span>
         <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly style="font-size:9px;height:20px;">
     `;
-    document.getElementById("mp-status").innerHTML = "Ответ готов! Вставь его на ПК.";
+    document.getElementById("mp-status").innerHTML = "Код ответа готов! Вставь его на ПК.";
 }
 
 function setupChannelListeners() {
@@ -253,7 +262,8 @@ window.addEventListener("load", () => {
         localConnection.ondatachannel = e => { dataChannel = e.channel; setupChannelListeners(); };
         try {
             localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(joinToken))));
-            localConnection.onicecandidate = e => { if(!e.candidate) { triggerJoinTokenDisplay(); } };
+            let forceShowJoinLoad = setTimeout(() => { triggerJoinTokenDisplay(); }, 200);
+            localConnection.onicecandidate = e => { if(!e.candidate) { clearTimeout(forceShowJoinLoad); triggerJoinTokenDisplay(); } };
             localConnection.createAnswer().then(a => localConnection.setLocalDescription(a));
         } catch(e) { document.getElementById("mp-status").innerHTML = "Ошибка подключения"; }
     }
@@ -274,10 +284,12 @@ function drawPixelBird(bx, by, skinId) {
         }
     }
     
-    // МАССИВНЫЕ КРЫЛЬЯ С КРАСИВОЙ ЧЁРНОЙ ОКАНТОВКОЙ И ВНУТРЕННИМ БЛИКОМ
-    ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 0), Math.floor(by + 8), 14, 8); 
-    ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 10), 10, 4); 
-    ctx.fillStyle = "#aaa"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 12), 6, 2); 
+    // ОРИГИНАЛЬНЫЕ КАНОНИЧНЫЕ КРЫЛЬЯ FLAPPY BIRD (КАК В ОРИГИНАЛЕ)
+    ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 10), 12, 8); 
+    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#4e342e" : "#d8a000"; 
+    ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 12), 8, 4); 
+    ctx.fillStyle = (targetSkin.id === 'freddy') ? "#b39ddb" : "#fff"; 
+    ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 10), 8, 2); 
 
     // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ КРОЛИК БОННИ (СМОТРИТ НАПРАВО, В СТОРОНУ ПОЛЁТА)
     if (targetSkin.id === 'freddy') {
@@ -287,11 +299,9 @@ function drawPixelBird(bx, by, skinId) {
         ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
         ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 6), 2, 4); ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 6), 2, 4);
         
-        // Длинные фиолетовые уши кролика со светлой сердцевиной
         drawPixelRect(bx + 4, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 6, by - 10, 2, 8, "#b39ddb"); 
         drawPixelRect(bx + 18, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 20, by - 10, 2, 8, "#b39ddb"); 
         
-        // Аккуратная серая мордочка и черный круглый нос
         drawPixelRect(bx + 14, by + 12, 14, 8, "#e0e0e0"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 12), 4, 3); 
     }
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
