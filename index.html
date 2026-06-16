@@ -143,7 +143,7 @@ function sendHighScoreOnline(finalScore) {
     if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
     else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
     
-    // ОТПРАВЛЯЕМ РЕКОРД В ГЛОБАЛЬНУЮ ОБЛАЧНУЮ БАЗУ GOOGLE FIREBASE
+    // ЖЕСТКИЙ ФИКС: Точный путь .json для отправки рекорда в глобальное облако Google
     fetch(`${FIREBASE_REST_URL}/leaderboard/${myPlayerName}.json`, {
         method: 'PUT',
         body: JSON.stringify({ name: myPlayerName, score: finalScore })
@@ -154,7 +154,7 @@ function sendHighScoreOnline(finalScore) {
 function fetchOnlineLeaderboard() {
     const container = document.getElementById("leader-items"); if (!container) return;
     
-    // Скачиваем мировые рекорды из облака Google
+    // ЖЕСТКИЙ ФИКС: Скачиваем общий мировой топ из валидного .json файла
     fetch(`${FIREBASE_REST_URL}/leaderboard.json`)
     .then(res => res.json()).then(data => {
         if (!data) return;
@@ -169,7 +169,6 @@ function fetchOnlineLeaderboard() {
             container.appendChild(item);
         });
     }).catch(e => {
-        // Запасной локальный вариант, если интернет моргнул
         container.innerHTML = "";
         localLeaderboard.sort((a, b) => parseInt(b.score) - parseInt(a.score)).slice(0, 3).forEach((player, index) => {
             const item = document.createElement("div"); item.className = "leader-item";
@@ -184,7 +183,6 @@ window.createNewServerRoom = function() {
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     
-    // Вечная фиксация лобби в облаке Google
     setInterval(() => {
         if (isHost && myRoomId) {
             fetch(`${FIREBASE_REST_URL}/rooms/${myRoomId}.json`, {
@@ -208,7 +206,6 @@ window.requestActiveRoomsList = function() {
             let now = Date.now();
             Object.keys(data).forEach(id => {
                 let room = data[id];
-                // Показываем только живые комнаты, созданные меньше 10 секунд назад
                 if (now - room.lastActive < 10000 && room.hostName !== myPlayerName) {
                     foundAny = true;
                     let roomDiv = document.createElement("div"); roomDiv.id = room.roomId; roomDiv.className = "room-item";
@@ -232,12 +229,10 @@ window.joinServerRoom = function(roomId) {
 function initNetwork() {
     document.getElementById("mp-status").innerHTML = "🟢 СЕТЬ АКТИВНА!";
     
-    // Регулярный сигнал онлайна в общую базу Google
     setInterval(() => {
         fetch(`${FIREBASE_REST_URL}/online/${myPlayerName}.json`, { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(e => {});
     }, 4000);
 
-    // Слушание онлайна других игроков на сайте
     setInterval(() => {
         fetch(`${FIREBASE_REST_URL}/online.json`)
         .then(res => res.json()).then(data => {
@@ -256,7 +251,7 @@ function initNetwork() {
         }).catch(e => {});
     }, 5000);
 
-    // Облачный дуэльный стрим движения птицы
+    // ЖЕСТКИЙ ФИКС СЕТЕВЫХ ПУТЕЙ: Все вложенные ветки строго закрываются расширением .json!
     setInterval(() => {
         if (!myRoomId) return;
         if (isHost) {
