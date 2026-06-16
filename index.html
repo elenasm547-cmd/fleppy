@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Perfect Sunset Edition</title>
+    <title>Flappy Bird MMO: Full Lobby Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -12,7 +12,7 @@
         .shop,.multiplayer-box,.leaderboard,.settings{background:#000;padding:15px;display:flex;flex-direction:column;gap:10px;border:4px solid #444;border-radius:10px;}
         h2{margin:0;text-align:center;font-size:16px;text-transform:uppercase;border-bottom:4px dashed #444;padding-bottom:8px;}
         .coins-display{color:#ffd700;font-size:16px;text-align:center;font-weight:bold;background:#222;padding:8px;border:2px solid #ffd700;}
-        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-size:12px;text-transform:uppercase;width:100%;box-sizing:border-box;}
+        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-size:12px;text-transform:uppercase;width:100%;box-sizing:border-box;margin-bottom:5px;}
         .room-item{display:flex;justify-content:space-between;align-items:center;background:#222;padding:8px 10px;border:2px solid #444;font-size:11px;margin-bottom:4px;border-radius:4px;}
         .join-btn{background:#00aa00;color:white;border:2px solid #fff;padding:4px 8px;cursor:pointer;font-weight:bold;font-size:11px;text-transform:uppercase;}
         .skin-item,.leader-item{display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 12px;border:2px solid #333;}
@@ -33,9 +33,11 @@
         <div class="multiplayer-box">
             <h2>GLOBAL ONLINE LOBBY</h2>
             <button class="mp-btn" id="host-btn" onclick="createNewServerRoom()">CREATE NEW GAME</button>
-            <div style="font-size:10px;color:#aaa;margin-top:6px;text-align:center;text-transform:uppercase;font-weight:bold;">Игроки на сайте / Комнаты:</div>
+            <!-- ДОБАВЛЕНА КНОПКА ПРИСОЕДИНЕНИЯ К ИГРЕ -->
+            <button class="mp-btn" id="join-list-btn" onclick="requestActiveRoomsList()" style="background:#2e7d32;">JOIN ACTIVE GAME</button>
+            <div style="font-size:10px;color:#aaa;margin-top:6px;text-align:center;text-transform:uppercase;font-weight:bold;">Активные лобби / Онлайн:</div>
             <div id="rooms-list"></div>
-            <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Подключение к сети...</div>
+            <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Подключение...</div>
         </div>
         <div class="shop"> 
             <h2>SHOP</h2> 
@@ -64,7 +66,7 @@ let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 // ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА С ЗАЩИТОЙ ОТ СБРОСА НИКА
 let myPlayerName = localStorage.getItem('flappy_device_name_v11');
 if (!myPlayerName) {
-    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
+    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ FIREBASE LOBBY! Введите ваш ник:", "Игрок");
     if (!userName || !userName.trim()) userName = "User_" + Math.floor(1000 + Math.random() * 9000);
     myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
     localStorage.setItem('flappy_device_name_v11', myPlayerName);
@@ -131,7 +133,7 @@ const allShopSkins = [
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
 
-// ЖЕСТКАЯ ИЗОЛЯЦИЯ: Скин — это первый объект из массива, а не сам массив!
+// ЖЕСТКАЯ ИЗОЛЯЦИЯ: Скин — это первый конкретный объект из массива, а не сам массив!
 let currentSkin = allShopSkins[0]; 
 
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
@@ -153,7 +155,7 @@ function sendHighScoreOnline(finalScore) {
     if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
     else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
     
-    // СИНХРОНИЗАЦИЯ: Отправляем рекорд в эфир, чтобы обновить таблицы на всех устройствах
+    // ОТПРАВЛЯЕМ РЕКОРД В ОБЛАКО ДЛЯ ДРУГИХ УСТРОЙСТВ
     broadcastNetworkMessage({ type: 'sync_leaderboard', sender: myPlayerName, score: finalScore });
     fetchOnlineLeaderboard();
 }
@@ -185,9 +187,17 @@ window.createNewServerRoom = function() {
     }, 1500);
 }
 
+// НОВАЯ ФУНКЦИЯ: Запрос списка комнат из эфира
+window.requestActiveRoomsList = function() {
+    initAudio();
+    const container = document.getElementById("rooms-list"); if (container) container.innerHTML = "<div style='text-align:center;font-size:10px;color:#aaa;'>ПОИСК КОМНАТ...</div>";
+    broadcastNetworkMessage({ type: 'request_rooms', sender: myPlayerName });
+}
+
 window.joinServerRoom = function(roomId) {
     initAudio(); isHost = false; myRoomId = roomId;
     document.getElementById("host-btn").style.display = "none";
+    document.getElementById("join-list-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ПОДКЛЮЧЕН К ИГРОКУ!";
     enemyBird.active = true;
 }
@@ -201,8 +211,16 @@ function initNetwork() {
             const msg = JSON.parse(event.data);
             const container = document.getElementById("rooms-list"); if (!container) return;
 
-            // ЖЕСТКИЙ ФИКС: Рендерим комнату и вечную кнопку JOIN
+            // Если кто-то ищет комнаты, а мы хост — мгновенно отвечаем ему
+            if (msg.type === 'request_rooms' && isHost && myRoomId) {
+                broadcastNetworkMessage({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
+            }
+
+            // Рендерим и удерживаем комнату с бессмертной кнопкой JOIN
             if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
+                // Если на экране висела заглушка "ПОИСК КОМНАТ", очищаем её перед выводом лобби
+                if (container.innerHTML.includes("ПОИСК КОМНАТ...")) container.innerHTML = "";
+                
                 let roomDiv = document.getElementById(msg.roomId);
                 if (!roomDiv) {
                     roomDiv = document.createElement("div"); roomDiv.id = msg.roomId; roomDiv.className = "room-item";
@@ -211,7 +229,7 @@ function initNetwork() {
                 roomDiv.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
             }
 
-            // ЖЕСТКИЙ ФИКС: Удерживаем игроков онлайн в боковой панели
+            // Рендерим и удерживаем игроков онлайн в боковой панели
             if (msg.type === 'ping_user' && msg.sender !== myPlayerName) {
                 let userDiv = document.getElementById("usr_" + msg.sender);
                 if (!userDiv) {
@@ -221,7 +239,7 @@ function initNetwork() {
                 userDiv.innerHTML = `<span style="color:#00ff00">● ${msg.sender}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
             }
 
-            // ОБНОВЛЕНИЕ ГЛОБАЛЬНОЙ ТАБЛИЦЫ РЕКОРДОВ ТОП-3
+            // Приём глобальных рекордов ТОП-3 от других игроков на сайте
             if (msg.type === 'sync_leaderboard' && msg.sender !== myPlayerName) {
                 let found = localLeaderboard.find(p => p.name === msg.sender);
                 if (found) { if (parseInt(msg.score) > found.score) found.score = parseInt(msg.score); } 
@@ -362,7 +380,7 @@ function draw() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-// ЖЕСТКАЯ СИНТАКСИЧЕСКАЯ ФИКСАЦИЯ: Выбираем только первый объект из списка!
+// ЖЕСТКАЯ СИНТАКСИЧЕСКАЯ ФИКСАЦИЯ: Выбираем строго первый объект утки под индексом 0!
 currentSkin = allShopSkins[0]; resetGame(); loop();
 window.addEventListener("load", () => { 
     updateShopUI(); 
