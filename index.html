@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Global Lobby Edition</title>
+    <title>Flappy Bird MMO: Firebase Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -25,7 +25,9 @@
         #rooms-list{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px;background:#111;padding:5px;border:2px solid #333;}
         @media(max-width:768px){.container{flex-direction:column;align-items:center;}canvas,.side-panel{width:100%;max-width:400px;}}
     </style>
-    <script src="https://jsdelivr.net"></script>
+    <!-- ПОДКЛЮЧАЕМ НАДЁЖНЫЕ ОБЛАЧНЫЕ СКРИПТЫ GOOGLE FIREBASE -->
+    <script src="https://gstatic.com"></script>
+    <script src="https://gstatic.com"></script>
 </head>
 <body>
 <div class="container"> 
@@ -62,16 +64,21 @@ let bird = {x: 50, y: 150, w: 34, h: 24, gravity: 0.4, velocity: 0, jump: -6.2};
 let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
-let myPlayerName = localStorage.getItem('flappy_device_name_v9');
+// ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА ДЛЯ ЖИВОГО СПИСКА ОНЛАЙН В FIREBASE
+let myPlayerName = localStorage.getItem('flappy_device_name_v10');
 if (!myPlayerName) {
-    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ MMO ЛОББИ! Введите ваш ник:", "Игрок");
+    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ FIREBASE LOBBY! Введите ваш ник:", "Игрок");
     if (!userName || !userName.trim()) userName = "User_" + Math.floor(1000 + Math.random() * 9000);
     myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
-    localStorage.setItem('flappy_device_name_v9', myPlayerName);
+    localStorage.setItem('flappy_device_name_v10', myPlayerName);
 }
 
-const gun = Gun(['https://herokuapp.com']);
-const lobbyNode = gun.get('flappy_mmo_global_lobby_2026');
+// ОФИЦИАЛЬНОЕ БЕСПЛАТНОЕ ОБЛАЧНОЕ ПОДКЛЮЧЕНИЕ К СЕРВЕРАМ GOOGLE FIREBASE
+const firebaseConfig = { databaseURL: "https://firebaseio.com" };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const lobbyRef = db.ref('flappy_mmo_lobby');
+const onlineRef = db.ref('flappy_mmo_online');
 
 let isHost = false, myRoomId = "";
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
@@ -123,7 +130,7 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0]; // Жесткая фиксация объекта!
+let currentSkin = skins[0]; // МАКСИМАЛЬНАЯ ФИКСАЦИЯ: строго первый объект утки
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -150,11 +157,12 @@ function fetchOnlineLeaderboard() {
     }
 }
 
+// РАБОТА С СЕРВЕРОМ GOOGLE FIREBASE
 window.createNewServerRoom = function() {
     initAudio(); isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
-    lobbyNode.get(myRoomId).put({ hostName: myPlayerName, pipes: "", enemyY: 150, enemySkin: currentSkin.id, lastActive: Date.now() });
+    lobbyRef.child(myRoomId).set({ hostName: myPlayerName, pipes: "", enemyY: 150, enemySkin: currentSkin.id, lastActive: firebase.database.ServerValue.TIMESTAMP });
 }
 
 window.joinServerRoom = function(roomId) {
@@ -164,46 +172,56 @@ window.joinServerRoom = function(roomId) {
     enemyBird.active = true;
 }
 
-setInterval(() => {
-    if (lobbyNode && myPlayerName) { lobbyNode.get('online_users').get(myPlayerName).put(Date.now()); }
-}, 4000);
+// Регистрация «пульса» игрока на сайте каждые 3 секунды
+const userStatusRef = onlineRef.child(myPlayerName);
+setInterval(() => { userStatusRef.set(firebase.database.ServerValue.TIMESTAMP); }, 3000);
+userStatusRef.onDisconnect().remove();
 
-lobbyNode.map().on((data, id) => {
-    if (!data) return;
+// ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ЛОББИ В РЕАЛЬНОМ ВРЕМЕНИ
+setInterval(() => {
     const container = document.getElementById("rooms-list"); if (!container) return;
-    
-    if (id === 'online_users') {
-        let now = Date.now();
+    container.innerHTML = ""; let now = Date.now();
+
+    // 1. Рендерим игроков онлайн
+    onlineRef.once('value', (snapshot) => {
+        let data = snapshot.val(); if (!data) return;
         Object.keys(data).forEach(user => {
-            if (user !== '_' && now - data[user] < 10000 && !document.getElementById("usr_" + user)) {
-                let div = document.createElement("div"); div.id = "usr_" + user; div.className = "room-item";
+            if (now - data[user] < 8000) {
+                let div = document.createElement("div"); div.className = "room-item";
                 div.innerHTML = `<span style="color:#00ff00">● ${user}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
                 container.appendChild(div);
-            } else if (now - data[user] >= 10000 && document.getElementById("usr_" + user)) {
-                document.getElementById("usr_" + user).remove();
             }
         });
-        return;
-    }
-    
-    if (id.startsWith("room_") && Date.now() - data.lastActive < 10000) {
-        if (document.getElementById(id)) return;
-        let div = document.createElement("div"); div.id = id; div.className = "room-item";
-        div.innerHTML = `<span>🎮 Лобби: ${data.hostName}</span><button class="join-btn" onclick="joinServerRoom('${id}')">JOIN</button>`;
-        container.appendChild(div);
-    }
-});
+    });
 
+    // 2. Рендерим комнаты
+    lobbyRef.once('value', (snapshot) => {
+        let data = snapshot.val(); if (!data) return;
+        Object.keys(data).forEach(id => {
+            if (now - data[id].lastActive < 8000) {
+                let div = document.createElement("div"); div.className = "room-item";
+                div.innerHTML = `<span>🎮 Лобби: ${data[id].hostName}</span><button class="join-btn" onclick="joinServerRoom('${id}')">JOIN</button>`;
+                container.appendChild(div);
+            } else { lobbyRef.child(id).remove(); }
+        });
+    });
+}, 2000);
+
+// ПОТОК СИНХРОНИЗАЦИИ КООРДИНАТ ДУЭЛИ
 setInterval(() => {
     if (!myRoomId) return;
     if (isHost) {
-        lobbyNode.get(myRoomId).put({ enemyY: bird.y, enemySkin: currentSkin.id, pipes: JSON.stringify(pipes), lastActive: Date.now() });
-        lobbyNode.get(myRoomId).get('guestData').on(data => { if(data) { enemyBird.active = true; enemyBird.y = data.y; enemyBird.currentSkinId = data.skin; } });
+        lobbyRef.child(myRoomId).update({ enemyY: bird.y, enemySkin: currentSkin.id, pipes: JSON.stringify(pipes), lastActive: firebase.database.ServerValue.TIMESTAMP });
+        lobbyRef.child(myRoomId).child('guestData').once('value', snapshot => {
+            let data = snapshot.val(); if(data) { enemyBird.active = true; enemyBird.y = data.y; enemyBird.currentSkinId = data.skin; }
+        });
     } else {
-        lobbyNode.get(myRoomId).put({ guestData: { y: bird.y, skin: currentSkin.id }, lastActive: Date.now() });
-        lobbyNode.get(myRoomId).on(data => { if(data) { enemyBird.y = data.enemyY; enemyBird.currentSkinId = data.enemySkin; if (data.pipes) pipes = JSON.parse(data.pipes); } });
+        lobbyRef.child(myRoomId).child('guestData').set({ y: bird.y, skin: currentSkin.id });
+        lobbyRef.child(myRoomId).once('value', snapshot => {
+            let data = snapshot.val(); if(data) { enemyBird.y = data.enemyY; enemyBird.currentSkinId = data.enemySkin; if (data.pipes) pipes = JSON.parse(data.pipes); }
+        });
     }
-}, 40);
+}, 45);
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
@@ -261,7 +279,7 @@ function update() {
 }
 
 function draw() {
-    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin[0].id);
+    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
     if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }
     
     pipes.forEach(p => { 
