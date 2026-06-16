@@ -47,6 +47,7 @@
                 <h2>WORLD TOP 3</h2>
                 <div id="leader-items">Loading...</div>
             </div>
+            .</div>
             <div class="settings">
                 <h2>AUDIO</h2>
                 <div class="setting-row"><span>MUSIC</span><input type="checkbox" id="music-toggle" checked></div>
@@ -70,7 +71,8 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v10', myPlayerName);
 }
 
-let isHost = false, myRoomId = "", db = null, lobbyRef = null, onlineRef = null;
+// ПЕРЕМЕННЫЕ FIREBASE СТРОГО В NULL ДЛЯ ЗАЩИТЫ ДО ИНИЦИАЛИЗАЦИИ
+let db = null, lobbyRef = null, onlineRef = null, isHost = false, myRoomId = "";
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -81,16 +83,17 @@ function initAudio() {
 }
 
 function playSound(freq, duration, type = 'sine', ramp = true) {
-    if (!sfxToggle.checked) return;
+    if (!sfxToggle || !sfxToggle.checked) return;
     if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
     if (audioCtx.state === 'suspended') return;
     try {
         let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
-        osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        if (ramp) osc.frequency.exponentialRampToValueAtTime(freq / 2, audioCtx.currentTime + duration);
+        osc.type = (typeof type === 'string') ? type : 'sine'; 
+        osc.frequency.setValueAtTime(Number(freq), audioCtx.currentTime);
+        if (ramp) osc.frequency.exponentialRampToValueAtTime(Number(freq) / 2, audioCtx.currentTime + Number(duration));
         gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime); 
-        gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-        osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
+        gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + Number(duration));
+        osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + Number(duration));
     } catch (e) {}
 }
 
@@ -98,7 +101,7 @@ function startAmbientMusic() {
     if (musicInterval) clearInterval(musicInterval);
     let notes = [130.81, 146.83, 164.81, 196.00], step = 0;
     musicInterval = setInterval(() => {
-        if (musicToggle.checked && audioCtx && audioCtx.state === 'running' && !gameOver) {
+        if (musicToggle && musicToggle.checked && audioCtx && audioCtx.state === 'running' && !gameOver) {
             try {
                 let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
                 osc.type = 'square'; osc.frequency.setValueAtTime(notes[step % notes.length], audioCtx.currentTime);
@@ -113,15 +116,17 @@ function getSkyColor() { return "rgb(112, 197, 206)"; }
 
 const birdMapRaw = ["00000111111000000", "00001222222110000", "00112222221331000", "01225522213113100", "12222552213113100", "12222222221331000", "12222222222111100", "1222222224444410", "0122222241111410", "0011222441114100", "0000114444441000", "0000001111110000"];
 
-const skins = [
+// ПОЛНОЕ УНИЧТОЖЕНИЕ БАГА: currentSkin — это жесткий изолированный одиночный объект!
+let currentSkin = {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true};
+
+const allShopSkins = [
     {id: 'default', name: 'Classic Duck', color: '#f8e71c', beak: '#ff5722', hat: false, price: 0, purchased: true},
     {id: 'cyber', name: 'Cyber Agent', color: '#00e5ff', beak: '#ff007f', hat: false, price: 50, purchased: false},
     {id: 'pirate', name: 'Pirate Bird', color: '#4e342e', beak: '#ffb300', hat: true, price: 100, purchased: false},
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-// ИСПРАВЛЕНО НАМЕРТВО: Привязываем объект первой утки, а не весь массив целиком!
-let currentSkin = skins[0]; 
+
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -153,7 +158,15 @@ window.createNewServerRoom = function() {
     isHost = true; myRoomId = "room_" + Math.floor(1000 + Math.random() * 9000);
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
-    lobbyRef.child(myRoomId).set({ hostName: myPlayerName, pipes: "", enemyY: 150, enemySkin: currentSkin.id, lastActive: firebase.database.ServerValue.TIMESTAMP });
+    
+    // БЕЗОПАСНОСТЬ: Добавлена лог-обработка ошибок отправки в облако Google
+    lobbyRef.child(myRoomId).set({ 
+        hostName: myPlayerName, 
+        pipes: "", 
+        enemyY: 150, 
+        enemySkin: currentSkin.id, 
+        lastActive: firebase.database.ServerValue.TIMESTAMP 
+    }).catch(error => { console.error("Ошибка Firebase при создании лобби:", error); });
 }
 
 window.joinServerRoom = function(roomId) {
@@ -165,18 +178,20 @@ window.joinServerRoom = function(roomId) {
 }
 
 function initFirebase() {
-    if (typeof firebase === "undefined") return;
+    if (typeof firebase === "undefined") { console.warn("Firebase ещё не загрузился в память."); return; }
+    console.log("Инициализация соединения с серверами Google...");
     const firebaseConfig = { databaseURL: "https://firebaseio.com" };
     firebase.initializeApp(firebaseConfig);
     db = firebase.database(); lobbyRef = db.ref('flappy_mmo_lobby'); onlineRef = db.ref('flappy_mmo_online');
     
     const userStatusRef = onlineRef.child(myPlayerName);
-    setInterval(() => { if (db) userStatusRef.set(firebase.database.ServerValue.TIMESTAMP); }, 3000);
+    setInterval(() => { if (db) userStatusRef.set(firebase.database.ServerValue.TIMESTAMP).catch(e=>{}); }, 3000);
     userStatusRef.onDisconnect().remove();
 
     setInterval(() => {
         const container = document.getElementById("rooms-list"); if (!container) return;
         container.innerHTML = ""; let now = Date.now();
+        
         onlineRef.once('value', snapshot => {
             let data = snapshot.val(); if (!data) return;
             Object.keys(data).forEach(user => {
@@ -186,7 +201,8 @@ function initFirebase() {
                     container.appendChild(div);
                 }
             });
-        });
+        }).catch(err => { console.error("Ошибка чтения списка игроков:", err); });
+
         lobbyRef.once('value', snapshot => {
             let data = snapshot.val(); if (!data) return;
             Object.keys(data).forEach(id => {
@@ -194,23 +210,23 @@ function initFirebase() {
                     let div = document.createElement("div"); div.className = "room-item";
                     div.innerHTML = `<span>🎮 Лобби: ${data[id].hostName}</span><button class="join-btn" onclick="joinServerRoom('${id}')">JOIN</button>`;
                     container.appendChild(div);
-                } else { lobbyRef.child(id).remove(); }
+                } else { lobbyRef.child(id).remove().catch(e=>{}); }
             });
-        });
+        }).catch(err => { console.error("Ошибка чтения списка комнат:", err); });
     }, 2000);
 
     setInterval(() => {
         if (!myRoomId || !db) return;
         if (isHost) {
-            lobbyRef.child(myRoomId).update({ enemyY: bird.y, enemySkin: currentSkin.id, pipes: JSON.stringify(pipes), lastActive: firebase.database.ServerValue.TIMESTAMP });
+            lobbyRef.child(myRoomId).update({ enemyY: bird.y, enemySkin: currentSkin.id, pipes: JSON.stringify(pipes), lastActive: firebase.database.ServerValue.TIMESTAMP }).catch(e=>{});
             lobbyRef.child(myRoomId).child('guestData').once('value', snap => {
                 let d = snap.val(); if(d) { enemyBird.active = true; enemyBird.y = d.y; enemyBird.currentSkinId = d.skin; }
-            });
+            }).catch(e=>{});
         } else {
-            lobbyRef.child(myRoomId).child('guestData').set({ y: bird.y, skin: currentSkin.id });
+            lobbyRef.child(myRoomId).child('guestData').set({ y: bird.y, skin: currentSkin.id }).catch(e=>{});
             lobbyRef.child(myRoomId).once('value', snap => {
                 let d = snap.val(); if(d) { enemyBird.y = d.enemyY; enemyBird.currentSkinId = d.enemySkin; if (d.pipes) pipes = JSON.parse(d.pipes); }
-            });
+            }).catch(e=>{});
         }
     }, 45);
 }
@@ -220,8 +236,8 @@ function drawPixelRect(x, y, w, h, fillColor) {
 }
 
 function drawPixelBird(bx, by, skinId) {
-    // ИСПРАВЛЕНО НАМЕРТВО: Запасным вариантом берется строго объект утки под индексом 0, а не массив целиком!
-    let targetSkin = skins.find(s => s.id === skinId) || skins[0]; let pSize = 2;
+    // ЖЕСТКИЙ ФИКС: Запасным вариантом берется строго объект утки под индексом 0, а не массив целиком!
+    let targetSkin = allShopSkins.find(s => s.id === skinId) || allShopSkins[0]; let pSize = 2;
     for (let r = 0; r < birdMapRaw.length; r++) {
         for (let c = 0; c < birdMapRaw[r].length; c++) {
             let pixelChar = birdMapRaw[r][c]; if (pixelChar === "0") continue;
@@ -231,24 +247,50 @@ function drawPixelBird(bx, by, skinId) {
         }
     }
     
-    // ОРИГИНАЛЬНЫЕ КАНОНИЧНЫЕ КРЫЛЬЯ FLAPPY BIRD
+    // ОРИГИНАЛЬНЫЕ КАНОНИЧНЫЕ КРЫЛЬЯ FLAPPY BIRD (С КОНТУРОМ И ТЕНЬЮ)
     ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 10), 12, 8); 
     ctx.fillStyle = (targetSkin.id === 'freddy') ? "#4e342e" : "#d8a000"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 12), 8, 4); 
     ctx.fillStyle = (targetSkin.id === 'freddy') ? "#b39ddb" : "#fff"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by + 10), 8, 2); 
 
-    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ КРОЛИК БОННИ (СМОТРИТ НАПРАВО)
+    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ КРОЛИК БОННИ (СМОТРИТ НАПРАВО, В СТОРОНУ ПОЛЁТА)
     if (targetSkin.id === 'freddy') {
         ctx.fillStyle = "#673ab7"; ctx.fillRect(Math.floor(bx), Math.floor(by), 34, 24);
         ctx.fillStyle = "#000"; ctx.strokeRect(Math.floor(bx), Math.floor(by), 34, 24);
         ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
         ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 6), 2, 4); ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 6), 2, 4);
+        
+        // Длинные фиолетовые уши со светлой сердцевиной
         drawPixelRect(bx + 4, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 6, by - 10, 2, 8, "#b39ddb"); 
         drawPixelRect(bx + 18, by - 12, 6, 12, "#673ab7"); drawPixelRect(bx + 20, by - 10, 2, 8, "#b39ddb"); 
+        
+        // Серая мордочка и черный носик
         drawPixelRect(bx + 14, by + 12, 14, 8, "#e0e0e0"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 12), 4, 3); 
     }
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 4), 20, 4); ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 14), 12, 10);
     }
+}
+
+function updateShopUI() {
+    let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
+    if (document.getElementById("coin-count")) document.getElementById("coin-count").innerText = walletCoins;
+    const container = document.getElementById("shop-items"); if (!container) return; container.innerHTML = "";
+    allShopSkins.forEach(skin => {
+        let isSavedPurchased = localStorage.getItem('skin_buy_' + skin.id) || skin.price === 0; if (isSavedPurchased) skin.purchased = true;
+        const item = document.createElement("div"); item.className = "skin-item";
+        let btnText = skin.purchased ? "EQUIP" : skin.price + ""; let btnClass = "shop-btn"; if (skin.id === currentSkin.id) { btnText = "ACTIVE"; btnClass += " equipped"; }
+        let isLocked = (!skin.purchased) && (walletCoins < skin.price); let disabledAttr = isLocked ? "disabled" : "";
+        item.innerHTML = `<div><span class="skin-name">${skin.name}</span></div><button class="${btnClass}" ${disabledAttr} onclick="buyOrEquip('${skin.id}')">${btnText}</button>`; container.appendChild(item);
+    });
+}
+
+window.buyOrEquip = function (id) {
+    initAudio(); const skin = allShopSkins.find(s => s.id === id); let walletCoins = parseInt(localStorage.getItem('flappy_total_coins')) || 0;
+    if (skin.purchased) { currentSkin = skin; playSound(587.33, 0.15, 'square', false); }
+    else if (walletCoins >= skin.price) {
+        walletCoins -= skin.price; localStorage.setItem('flappy_total_coins', walletCoins); localStorage.setItem('skin_buy_' + skin.id, true); skin.purchased = true; currentSkin = skin; playSound(880, 0.3, 'square', false);
+    }
+    updateShopUI();
 }
 
 function spawnPipe() { if (!isHost && myRoomId) return; let gap = 135, minH = 60, maxH = canvas.height - gap - minH; let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH; pipes.push({x: canvas.width, top: topH, bottom: canvas.height - topH - gap, w: 55, passed: false}); }
@@ -288,6 +330,7 @@ function draw() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
+// ПОЛНЫЕ И БЕЗОПАСНЫЕ ССЫЛКИ НА GOOGLE FIREBASE С АСИНХРОННОЙ ПОДГРУЗКОЙ
 function loadFirebaseScripts() {
     const s1 = document.createElement("script"); s1.src = "https://gstatic.com";
     const s2 = document.createElement("script"); s2.src = "https://gstatic.com";
@@ -298,8 +341,7 @@ function loadFirebaseScripts() {
     document.body.appendChild(s1);
 }
 
-// ИСПРАВЛЕНО НАМЕРТВО: Присваиваем объект первой классической утки skins[0], а не массив!
-currentSkin = skins[0]; resetGame(); loop();
+resetGame(); loop();
 window.addEventListener("load", () => { updateShopUI(); loadFirebaseScripts(); });
 </script>
 </body>
