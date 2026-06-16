@@ -87,7 +87,7 @@ function playSound(freq, duration, type = 'sine', ramp = true) {
         let osc = audioCtx.createOscillator(), gainNode = audioCtx.createGain();
         osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
         if (ramp) osc.frequency.exponentialRampToValueAtTime(freq / 2, audioCtx.currentTime + duration);
-        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.01, duration);
         osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
     } catch (e) {}
 }
@@ -118,7 +118,7 @@ const skins = [
     {id: 'freddy', name: 'Bonnie Rabbit', color: '#673ab7', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins;
+let currentSkin = skins[0]; // Жёсткая фиксация базовой утки, чтобы не было серого экрана!
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -172,9 +172,9 @@ function triggerTokenDisplay() {
     if (document.getElementById("mp-status").innerHTML === "Комната создана! Ожидание...") return;
     let token = btoa(JSON.stringify(localConnection.localDescription));
     
-    // СВЕРХТОЧНОЕ ИСПРАВЛЕНИЕ: берем строго первый элемент массива, убирая запятые
-    let cleanUrl = window.location.href.split('?');
-    let gameLink = cleanUrl[0] + "?join=" + token;
+    // ИДЕАЛЬНОЕ ИСПРАВЛЕНИЕ: Отрезаем старые параметры строго через индекс [0] массива, убирая запятые
+    let cleanUrl = window.location.href.split('?')[0];
+    let gameLink = cleanUrl + "?join=" + token;
 
     document.getElementById("mp-area").innerHTML = `
         <span style="font-size:10px;color:#aaa;">1. Наведи телефон на QR-код для быстрого входа:</span>
@@ -322,7 +322,7 @@ canvas.addEventListener("mousedown", () => { handleJump(); canvas.focus(); }); c
 
 function update() {
     if (dataChannel && dataChannel.readyState === "open") {
-        dataChannel.send(JSON.stringify({type: 'fly', y: bird.y, skin: currentSkin[0].id}));
+        dataChannel.send(JSON.stringify({type: 'fly', y: bird.y, skin: currentSkin.id}));
         if (isHost && pipes.length > 0) dataChannel.send(JSON.stringify({type: 'pipe', pipes: JSON.stringify(pipes)}));
     }
     if (gameOver) {
@@ -338,13 +338,13 @@ function update() {
 }
 
 function draw() {
-    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin[0].id);
+    ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
     if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }
     
     pipes.forEach(p => { 
         drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), 0, 2, Math.floor(p.top));
         drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 2, 20);
-        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(bTop));
+        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));
         drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);
     });
 
@@ -352,7 +352,7 @@ function draw() {
     if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }
 }
 function loop() { update(); draw(); requestAnimationFrame(loop); }
-currentSkin = skins; resetGame(); loop();
+currentSkin = skins[0]; resetGame(); loop();
 </script>
 </body>
 </html>
