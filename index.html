@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Attack Freddy Edition</title>
+    <title>Flappy Bird MMO: Attack Freddy</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -12,7 +12,7 @@
         .shop,.multiplayer-box,.leaderboard,.settings{background:#000;padding:15px;display:flex;flex-direction:column;gap:10px;border:4px solid #444;border-radius:10px;}
         h2{margin:0;text-align:center;font-size:16px;text-transform:uppercase;border-bottom:4px dashed #444;padding-bottom:8px;}
         .coins-display{color:#ffd700;font-size:16px;text-align:center;font-weight:bold;background:#222;padding:8px;border:2px solid #ffd700;}
-        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-size:12px;text-transform:uppercase;}
+        .mp-btn{background:#1565c0;color:white;border:2px solid #fff;padding:8px;cursor:pointer;font-weight:bold;font-family:inherit;font-size:12px;text-transform:uppercase;}
         .mp-input{background:#222;border:2px solid #444;color:#fff;padding:8px;text-align:center;font-size:14px;width:100%;box-sizing:border-box;}
         .skin-item,.leader-item{display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 12px;border:2px solid #333;}
         .skin-name{font-weight:bold;font-size:14px;text-transform:uppercase;}
@@ -118,7 +118,7 @@ const skins = [
     {id: 'freddy', name: 'Attack Freddy', color: '#6d4c41', beak: '#3e2723', hat: true, price: 15, purchased: false},
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
-let currentSkin = skins[0];
+let currentSkin = skins[0]; // Жесткая фиксация базовой утки
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -167,33 +167,16 @@ function triggerTokenDisplay() {
     let token = btoa(JSON.stringify(localConnection.localDescription));
     let gameLink = window.location.origin + window.location.pathname + "?join=" + token;
 
-    document.getElementById("mp-area").innerHTML = `<div style="text-align:center;color:#ffd700;font-size:12px;">Упаковка кода в короткую ссылку...</div>`;
-
-    fetch(`https://is.gd{encodeURIComponent(gameLink)}`)
-        .then(res => res.json())
-        .then(data => {
-            let shortUrl = data.shorturl || gameLink;
-            document.getElementById("mp-area").innerHTML = `
-                <span style="font-size:10px;color:#aaa;">1. Наведи телефон на QR-код или введи ссылку руками:</span>
-                <div style="background:#fff;padding:10px;border-radius:8px;margin:5px auto;width:180px;height:180px;display:flex;justify-content:center;align-items:center;">
-                    <img src="https://qrserver.com{encodeURIComponent(shortUrl)}" style="width:180px;height:180px;">
-                </div>
-                <input class="mp-input" type="text" value="${shortUrl}" onclick="this.select()" readonly style="color:#ffd700;font-weight:bold;margin-bottom:8px;">
-                <span style="font-size:10px;color:#aaa;">2. Вставь короткий ответный код с телефона сюда:</span>
-                <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга...">
-                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">3. ПОДКЛЮЧИТЬ ИГРОКА</button>
-            `;
-            document.getElementById("mp-status").innerHTML = "Комната готова! Ожидание входа...";
-        })
-        .catch(() => {
-            document.getElementById("mp-area").innerHTML = `
-                <span style="font-size:10px;color:#ff5555;">Сервер сокращения занят. Используйте прямой токен:</span>
-                <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly>
-                <input id="join-code-input" class="mp-input" placeholder="Вставь ответ друга...">
-                <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">ПОДКЛЮЧИТЬ ИГРОКА</button>
-            `;
-            document.getElementById("mp-status").innerHTML = "Резервный режим обмена кодами";
-        });
+    document.getElementById("mp-area").innerHTML = `
+        <span style="font-size:10px;color:#aaa;">1. Наведи телефон на QR-код для быстрого входа:</span>
+        <div style="background:#fff;padding:10px;border-radius:8px;margin:5px auto;width:180px;height:180px;display:flex;justify-content:center;align-items:center;">
+            <img src="https://qrserver.com{encodeURIComponent(gameLink)}" style="width:180px;height:180px;">
+        </div>
+        <span style="font-size:10px;color:#aaa;margin-top:4px;">2. Вставь короткий ответный код с телефона сюда:</span>
+        <input id="join-code-input" class="mp-input" placeholder="Введи ответ друга...">
+        <button class="mp-btn" style="margin-top:5px;background:#2e7d32;width:100%;" onclick="acceptAnswer()">3. ПОДКЛЮЧИТЬ ИГРОКА</button>
+    `;
+    document.getElementById("mp-status").innerHTML = "Комната создана! Ожидание...";
 }
 
 window.acceptAnswer = function() {
@@ -222,11 +205,11 @@ function triggerJoinTokenDisplay() {
     let token = btoa(JSON.stringify(localConnection.localDescription));
     document.getElementById("mp-area").innerHTML = `
         <span style="font-size:10px;color:#aaa;">Перепиши или скопируй эти 6 символов ответа на ПК:</span>
-        <input class="mp-input" type="text" value="${token.substring(0,6)}" onclick="this.select()" readonly style="font-size:24px;color:#00ff00;letter-spacing:2px;font-weight:bold;">
+        <input class="mp-input" type="text" value="${token.substring(0,6)}" readonly style="font-size:24px;color:#00ff00;letter-spacing:2px;font-weight:bold;">
         <span style="font-size:9px;color:#666;margin-top:4px;">Полный технический токен:</span>
         <input class="mp-input" type="text" value="${token}" onclick="this.select()" readonly style="font-size:9px;height:20px;">
     `;
-    document.getElementById("mp-status").innerHTML = "Код ответа готов! Вставь его на ПК.";
+    document.getElementById("mp-status").innerHTML = "Ответ готов! Вставь его на ПК.";
 }
 
 function setupChannelListeners() {
@@ -290,17 +273,35 @@ function drawPixelBird(bx, by, skinId) {
             ctx.fillStyle = color; ctx.fillRect(Math.floor(px), Math.floor(py), pSize, pSize);
         }
     }
-    // ФАНАТСКИЙ СПРАЙТ: МИШКА ФРЕДДИ СМОТРИТ НАПРАВО (В СТОРОНУ ПОЛЁТА)
+    
+    // ЭФФЕКТ ДЛЯ ВСЕХ ПТИЦ: УВЕЛИЧЕННЫЕ МАССИВНЫЕ КРЫЛЬЯ
+    ctx.fillStyle = "#fff"; 
+    ctx.fillRect(Math.floor(bx + 4), Math.floor(by + 10), 10, 4); 
+    ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 12), 12, 4); 
+    ctx.fillStyle = "#000";
+    ctx.fillRect(Math.floor(bx + 2), Math.floor(by + 10), 2, 6);
+    ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 12), 2, 4);
+
+    // ПОПИКСЕЛЬНЫЙ КАНОНИЧНЫЙ МИШКА ФРЕДДИ (СМОТРИТ НАПРАВО)
     if (targetSkin.id === 'freddy') {
-        ctx.fillStyle = targetSkin.color; ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 12), 8, 8);
-        drawPixelRect(bx + 2, by - 6, 6, 6, "#4e342e"); drawPixelRect(bx + 4, by - 4, 2, 2, "#8d6e63"); 
-        drawPixelRect(bx + 24, by - 6, 6, 6, "#4e342e"); drawPixelRect(bx + 26, by - 4, 2, 2, "#8d6e63"); 
-        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(Math.floor(bx + 6), Math.floor(by - 10), 24, 4); ctx.fillRect(Math.floor(bx + 10), Math.floor(by - 22), 16, 12); 
-        ctx.fillStyle = "#d32f2f"; ctx.fillRect(Math.floor(bx + 10), Math.floor(by - 14), 16, 4); 
-        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 12), Math.floor(by + 4), 6, 6); ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 4), 6, 6);
-        ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 15), Math.floor(by + 6), 2, 2); ctx.fillRect(Math.floor(bx + 27), Math.floor(by + 6), 2, 2);
-        drawPixelRect(bx + 14, by + 12, 16, 8, "#d7ccc8"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 12), 4, 3);
-        drawPixelRect(bx + 14, by + 20, 12, 4, "#4e342e"); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 10), Math.floor(by + 26), 10, 4);
+        // Стираем текстуру утиного клюва коричневым цветом головы
+        ctx.fillStyle = targetSkin.color; ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 10), 8, 10);
+        // Красивые объёмные ушки с тёмно-коричневой сердцевиной
+        drawPixelRect(bx + 2, by - 6, 8, 8, "#6d4c41"); drawPixelRect(bx + 4, by - 4, 4, 4, "#4e342e"); 
+        drawPixelRect(bx + 24, by - 6, 8, 8, "#6d4c41"); drawPixelRect(bx + 26, by - 4, 4, 4, "#4e342e"); 
+        // Каноничный маленький чёрный цилиндр на макушке
+        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 10), 18, 4); 
+        ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 20), 10, 10); 
+        // Большие выразительные глаза (Чёрный контур + Голубая радужка + Белый зрачок)
+        drawPixelRect(bx + 10, by + 2, 8, 8, "#fff"); ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 14), Math.floor(by + 4), 4, 6); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 4), 2, 4);
+        drawPixelRect(bx + 22, by + 2, 8, 8, "#fff"); ctx.fillStyle = "#00a2e8"; ctx.fillRect(Math.floor(bx + 26), Math.floor(by + 4), 4, 6); ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 28), Math.floor(by + 4), 2, 4);
+        // Объёмная круглая мордочка с точками усов
+        drawPixelRect(bx + 12, by + 10, 18, 8, "#d7ccc8"); 
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 22), Math.floor(by + 10), 4, 3); // Носик
+        ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(bx + 24), Math.floor(by + 10), 2, 1); // Блик на носу
+        ctx.fillStyle = "#3e2723"; ctx.fillRect(Math.floor(bx + 15), Math.floor(by + 14), 2, 2); ctx.fillRect(Math.floor(bx + 18), Math.floor(by + 13), 2, 2); // Точки усов
+        // Аккуратный чёрный галстук-бабочка на груди
+        ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 12), Math.floor(by + 24), 12, 4); ctx.fillRect(Math.floor(bx + 16), Math.floor(by + 22), 4, 6);
     }
     if (targetSkin.hat && targetSkin.id !== 'freddy') {
         ctx.fillStyle = "#000"; ctx.fillRect(Math.floor(bx + 8), Math.floor(by - 4), 20, 4); ctx.fillRect(Math.floor(bx + 12), Math.floor(by - 14), 12, 10);
@@ -334,15 +335,12 @@ function update() {
 function draw() {
     ctx.fillStyle = getSkyColor(); ctx.fillRect(0, 0, canvas.width, canvas.height); drawPixelBird(bird.x, bird.y, currentSkin.id);
     if (enemyBird.active) { ctx.globalAlpha = 0.6; drawPixelBird(bird.x, enemyBird.y, enemyBird.currentSkinId); ctx.globalAlpha = 1.0; }
-    
-    // ОТРИСОВКА ЛЕГЕНДАРНЫХ ОБЪЁМНЫХ ТРУБ С РАСПОРКАМИ И БЛИКАМИ
     pipes.forEach(p => { 
         drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), 0, 2, Math.floor(p.top));
         drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 2, 20);
-        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));
+        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(bTop));
         drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);
     });
-
     ctx.fillStyle = "#fff"; ctx.font = "bold 32px 'Courier New'"; ctx.fillText(score, canvas.width / 2 - 12, 50);
     if (gameOver) { ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#fff"; ctx.font = "bold 30px 'Courier New'"; ctx.fillText("GAME OVER", 110, 220); }
 }
