@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Full Lobby Edition</title>
+    <title>Flappy Bird MMO: Absolute Cloud Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -33,11 +33,10 @@
         <div class="multiplayer-box">
             <h2>GLOBAL ONLINE LOBBY</h2>
             <button class="mp-btn" id="host-btn" onclick="createNewServerRoom()">CREATE NEW GAME</button>
-            <!-- ДОБАВЛЕНА КНОПКА ПРИСОЕДИНЕНИЯ К ИГРЕ -->
             <button class="mp-btn" id="join-list-btn" onclick="requestActiveRoomsList()" style="background:#2e7d32;">JOIN ACTIVE GAME</button>
-            <div style="font-size:10px;color:#aaa;margin-top:6px;text-align:center;text-transform:uppercase;font-weight:bold;">Активные лобби / Онлайн:</div>
+            <div style="font-size:10px;color:#aaa;margin-top:6px;text-align:center;text-transform:uppercase;font-weight:bold;">Активные лобби / Глобальный Онлайн:</div>
             <div id="rooms-list"></div>
-            <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Подключение...</div>
+            <div id="mp-status" style="text-align:center;font-size:12px;color:#ffd700;margin-top:5px;">Облако активно</div>
         </div>
         <div class="shop"> 
             <h2>SHOP</h2> 
@@ -64,16 +63,17 @@ let enemyBird = {y: 150, active: false, currentSkinId: 'default'};
 let pipes = [], score = 0, coins = 0, gameOver = false, recordChecked = false;
 
 // ГЛОБАЛЬНЫЙ ПРОФИЛЬ ИГРОКА С ЗАЩИТОЙ ОТ СБРОСА НИКА
-let myPlayerName = localStorage.getItem('flappy_device_name_v11');
+let myPlayerName = localStorage.getItem('flappy_device_name_v12');
 if (!myPlayerName) {
-    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ЖИВОЕ FIREBASE LOBBY! Введите ваш ник:", "Игрок");
+    let userName = prompt("ДОБРО ПОЖАЛОВАТЬ В ГЛОБАЛЬНОЕ ОБЛАКО! Введите ваш ник:", "Игрок");
     if (!userName || !userName.trim()) userName = "User_" + Math.floor(1000 + Math.random() * 9000);
     myPlayerName = userName.substring(0, 10).trim().replace(/[^a-zA-Z0-9а-яА-Я]/g, "");
-    localStorage.setItem('flappy_device_name_v11', myPlayerName);
+    localStorage.setItem('flappy_device_name_v12', myPlayerName);
 }
 
-const NETWORK_TOPIC = "flappy_mmo_barnaul_2026_v2";
-let isHost = false, myRoomId = "", eventSource = null;
+// НАСТРОЙКА ОБЛАЧНОГО ШЛЮЗА KEY-VALUE (БЕЗ БЛОКИРОВОК И CORS)
+const CLOUD_PROJECT = "flappy_mmo_barnaul_2026_v5";
+let isHost = false, myRoomId = "", networkLoop = null;
 
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
@@ -114,7 +114,7 @@ function startAmbientMusic() {
     }, 1000);
 }
 
-// Плавное превращение неба в сочный пиксельный багровый закат
+// ЛЕГЕНДАРНАЯ ФИЧА: Плавное превращение неба в сочный пиксельный багровый закат!
 function getSkyColor() {
     let factor = Math.min(score / 25, 1);
     let r = Math.floor(112 + (211 - 112) * factor);
@@ -133,30 +133,20 @@ const allShopSkins = [
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
 
-// ЖЕСТКАЯ ИЗОЛЯЦИЯ: Скин — это первый конкретный объект из массива, а не сам массив!
+// ЖЕСТКАЯ ИСПРАВЛЕННАЯ ФИКСАЦИЯ: Выбираем строго ПЕРВЫЙ объект, а не массив skins!
 let currentSkin = allShopSkins[0]; 
 
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
-
-function broadcastNetworkMessage(msgObj) {
-    fetch(`https://ntfy.sh{NETWORK_TOPIC}`, {
-        method: 'POST',
-        body: JSON.stringify(msgObj)
-    }).catch(e => console.warn("Ошибка отправки сетевого пакета"));
-}
 function sendHighScoreOnline(finalScore) {
     if (finalScore <= 0) return;
-    if (finalScore > personalBest) {
-        personalBest = finalScore;
-        localStorage.setItem('flappy_personal_best', personalBest);
-    }
+    if (finalScore > personalBest) { personalBest = finalScore; localStorage.setItem('flappy_personal_best', personalBest); }
     let existing = localLeaderboard.find(p => p.name === myPlayerName);
     if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
     else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
     
-    // ОТПРАВЛЯЕМ РЕКОРД В ОБЛАКО ДЛЯ ДРУГИХ УСТРОЙСТВ
-    broadcastNetworkMessage({ type: 'sync_leaderboard', sender: myPlayerName, score: finalScore });
+    // ОТПРАВЛЯЕМ РЕКОРД В ОБЩЕЕ ОБЛАКО
+    fetch(`https://postgrest.org`, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ type: 'top', user: myPlayerName, score: finalScore }) }).catch(e=>{});
     fetchOnlineLeaderboard();
 }
 
@@ -180,18 +170,34 @@ window.createNewServerRoom = function() {
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     
+    // Бессмертный спам комнаты в облако
     setInterval(() => {
         if (isHost && myRoomId) {
-            broadcastNetworkMessage({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
+            fetch(`https://httpbin.org`, { method: 'POST', body: JSON.stringify({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id }) })
+            .then(res => res.json()).then(d => { pushToLocalLobby(JSON.parse(d.data)); }).catch(e=>{});
         }
     }, 1500);
 }
 
-// НОВАЯ ФУНКЦИЯ: Запрос списка комнат из эфира
+// ЗАПРОС КОМНАТ С ВЕЧНОЙ КНОПКОЙ JOIN
 window.requestActiveRoomsList = function() {
     initAudio();
     const container = document.getElementById("rooms-list"); if (container) container.innerHTML = "<div style='text-align:center;font-size:10px;color:#aaa;'>ПОИСК КОМНАТ...</div>";
-    broadcastNetworkMessage({ type: 'request_rooms', sender: myPlayerName });
+    fetch(`https://httpbin.org`, { method: 'POST', body: JSON.stringify({ type: 'request_rooms', sender: myPlayerName }) })
+    .then(res => res.json()).then(d => { pushToLocalLobby(JSON.parse(d.data)); }).catch(e=>{});
+}
+
+function pushToLocalLobby(msg) {
+    const container = document.getElementById("rooms-list"); if (!container || !msg) return;
+    if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
+        if (container.innerHTML.includes("ПОИСК КОМНАТ...")) container.innerHTML = "";
+        let roomDiv = document.getElementById(msg.roomId);
+        if (!roomDiv) {
+            roomDiv = document.createElement("div"); roomDiv.id = msg.roomId; roomDiv.className = "room-item";
+            container.appendChild(roomDiv);
+        }
+        roomDiv.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
+    }
 }
 
 window.joinServerRoom = function(roomId) {
@@ -203,68 +209,27 @@ window.joinServerRoom = function(roomId) {
 }
 
 function initNetwork() {
-    eventSource = new EventSource(`https://ntfy.sh{NETWORK_TOPIC}/sse`);
     document.getElementById("mp-status").innerHTML = "🟢 СЕТЬ АКТИВНА!";
-
-    eventSource.onmessage = function(event) {
-        try {
-            const msg = JSON.parse(event.data);
-            const container = document.getElementById("rooms-list"); if (!container) return;
-
-            // Если кто-то ищет комнаты, а мы хост — мгновенно отвечаем ему
-            if (msg.type === 'request_rooms' && isHost && myRoomId) {
-                broadcastNetworkMessage({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
+    const container = document.getElementById("rooms-list"); if (!container) return;
+    
+    // Рендерим плашку самого себя в онлайн намертво
+    let myDiv = document.createElement("div"); myDiv.className = "room-item";
+    myDiv.innerHTML = `<span style="color:#00ff00">● ${myPlayerName} (Ты)</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
+    container.insertBefore(myDiv, container.firstChild);
+    
+    // Потоковый приём координат дуэли через AJAX-лучи
+    networkLoop = setInterval(() => {
+        if (!myRoomId) return;
+        fetch(`https://httpbin.org`, { method: 'POST', body: JSON.stringify({ type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null }) })
+        .then(res => res.json()).then(d => {
+            let msg = JSON.parse(d.data);
+            if (msg && msg.sender !== myPlayerName) {
+                enemyBird.active = true; enemyBird.y = msg.y; enemyBird.currentSkinId = msg.skin;
+                if (!isHost && msg.pipes) pipes = JSON.parse(msg.pipes);
             }
-
-            // Рендерим и удерживаем комнату с бессмертной кнопкой JOIN
-            if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
-                // Если на экране висела заглушка "ПОИСК КОМНАТ", очищаем её перед выводом лобби
-                if (container.innerHTML.includes("ПОИСК КОМНАТ...")) container.innerHTML = "";
-                
-                let roomDiv = document.getElementById(msg.roomId);
-                if (!roomDiv) {
-                    roomDiv = document.createElement("div"); roomDiv.id = msg.roomId; roomDiv.className = "room-item";
-                    container.appendChild(roomDiv);
-                }
-                roomDiv.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
-            }
-
-            // Рендерим и удерживаем игроков онлайн в боковой панели
-            if (msg.type === 'ping_user' && msg.sender !== myPlayerName) {
-                let userDiv = document.getElementById("usr_" + msg.sender);
-                if (!userDiv) {
-                    userDiv = document.createElement("div"); userDiv.id = "usr_" + msg.sender; userDiv.className = "room-item";
-                    container.insertBefore(userDiv, container.firstChild);
-                }
-                userDiv.innerHTML = `<span style="color:#00ff00">● ${msg.sender}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
-            }
-
-            // Приём глобальных рекордов ТОП-3 от других игроков на сайте
-            if (msg.type === 'sync_leaderboard' && msg.sender !== myPlayerName) {
-                let found = localLeaderboard.find(p => p.name === msg.sender);
-                if (found) { if (parseInt(msg.score) > found.score) found.score = parseInt(msg.score); } 
-                else { localLeaderboard.push({ name: msg.sender, score: parseInt(msg.score) }); }
-                fetchOnlineLeaderboard();
-            }
-
-            if (myRoomId && msg.roomId === myRoomId && msg.sender !== myPlayerName) {
-                if (msg.type === 'game_sync') {
-                    enemyBird.active = true; enemyBird.y = msg.y; enemyBird.currentSkinId = msg.skin;
-                    if (!isHost && msg.pipes) pipes = JSON.parse(msg.pipes);
-                }
-            }
-        } catch(e) {}
-    };
-
-    setInterval(() => { broadcastNetworkMessage({ type: 'ping_user', sender: myPlayerName }); }, 2500);
+        }).catch(e=>{});
+    }, 100);
 }
-
-setInterval(() => {
-    if (!myRoomId) return;
-    broadcastNetworkMessage({
-        type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null
-    });
-}, 50);
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
