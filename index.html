@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flappy Bird MMO: Cloud REST Edition</title>
+    <title>Flappy Bird MMO: Eternal Cloud Edition</title>
     <style>
         body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;font-family:'Courier New',monospace;color:white;padding:10px;box-sizing:border-box;}
         .container{display:flex;gap:20px;background:#222;padding:20px;border:4px solid #444;box-shadow:10px 10px 0px #000;border-radius:15px;max-width:100%;box-sizing:border-box;}
@@ -71,10 +71,10 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v12', myPlayerName);
 }
 
-// НАСТРОЙКА АБСОЛЮТНО ЛЕГАЛЬНОГО HTTPS REST ШЛЮЗА КБ (БЕЗ БЛОКИРОВОК)
-const CHANNEL = "flappy_mmo_barnaul_2026_cloud_v3";
-let isHost = false, myRoomId = "", networkLoop = null;
+// ОФИЦИАЛЬНАЯ БЕСПЛАТНАЯ И ДОСТУПНАЯ БАЗА ДАННЫХ GOOGLE FIREBASE REALTIME REST API
+const FIREBASE_REST_URL = "https://firebaseio.com";
 
+let isHost = false, myRoomId = "", networkLoop = null;
 const musicToggle = document.getElementById("music-toggle"), sfxToggle = document.getElementById("sfx-toggle");
 let audioCtx = null, musicInterval = null;
 
@@ -114,7 +114,7 @@ function startAmbientMusic() {
     }, 1000);
 }
 
-// ЛЕГЕНДАРНАЯ ФИЧА: Плавное превращение неба в сочный пиксельный багровый закат!
+// ФИРМЕННАЯ ФИЧА: Плавное превращение неба в сочный пиксельный багровый закат!
 function getSkyColor() {
     let factor = Math.min(score / 25, 1);
     let r = Math.floor(112 + (211 - 112) * factor);
@@ -133,9 +133,7 @@ const allShopSkins = [
     {id: 'king', name: 'Rich King', color: '#ffd700', beak: '#d84315', hat: true, price: 300, purchased: false}
 ];
 
-// ЖЁСТКАЯ ИСПРАВЛЕННАЯ ФИКСАЦИЯ: Выбираем строго первый ОБЪЕКТ, а не массив allShopSkins!
 let currentSkin = allShopSkins[0]; 
-
 let personalBest = parseInt(localStorage.getItem('flappy_personal_best')) || 0;
 let localLeaderboard = JSON.parse(localStorage.getItem('flappy_local_top4')) || [];
 function sendHighScoreOnline(finalScore) {
@@ -145,30 +143,40 @@ function sendHighScoreOnline(finalScore) {
     if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
     else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
     
-    // ОТПРАВЛЯЕМ РЕКОРД В ГЛОБАЛЬНЫЙ ЭФИР REST-ПАКЕТОМ
-    sendRestPacket({ type: 'sync_leaderboard', sender: myPlayerName, score: finalScore });
+    // ОТПРАВЛЯЕМ РЕКОРД В ГЛОБАЛЬНУЮ ОБЛАЧНУЮ БАЗУ GOOGLE FIREBASE
+    fetch(`${FIREBASE_REST_URL}/leaderboard/${myPlayerName}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: myPlayerName, score: finalScore })
+    }).catch(e => {});
     fetchOnlineLeaderboard();
 }
 
 function fetchOnlineLeaderboard() {
-    const container = document.getElementById("leader-items"); if (!container) return; container.innerHTML = "";
-    localLeaderboard.sort((a, b) => parseInt(b.score) - parseInt(a.score));
-    localLeaderboard = localLeaderboard.slice(0, 3);
-    localStorage.setItem('flappy_local_top4', JSON.stringify(localLeaderboard));
-    if (localLeaderboard.length === 0) { container.innerHTML = "<div style='text-align:center;color:#666;'>НЕТ РЕКОРДОВ</div>"; } 
-    else {
+    const container = document.getElementById("leader-items"); if (!container) return;
+    
+    // Скачиваем мировые рекорды из облака Google
+    fetch(`${FIREBASE_REST_URL}/leaderboard.json`)
+    .then(res => res.json()).then(data => {
+        if (!data) return;
+        let cloudList = Object.keys(data).map(key => data[key]);
+        cloudList.sort((a, b) => parseInt(b.score) - parseInt(a.score));
+        localLeaderboard = cloudList.slice(0, 3);
+        
+        container.innerHTML = "";
         localLeaderboard.forEach((player, index) => {
             const item = document.createElement("div"); item.className = "leader-item";
             item.innerHTML = `<span>#${index + 1} ${player.name}</span><span style='font-weight:bold'>${player.score}</span>`;
             container.appendChild(item);
         });
-    }
-}
-
-// УЛЬТРА-ПРОЧНЫЙ СЕТЕВОЙ ОТПРАВИТЕЛЬ REST-ПАКЕТОВ
-function sendRestPacket(msgObj) {
-    const url = `https://pndsn.com{CHANNEL}/0`;
-    fetch(url, { method: 'POST', body: JSON.stringify(msgObj) }).catch(e => {});
+    }).catch(e => {
+        // Запасной локальный вариант, если интернет моргнул
+        container.innerHTML = "";
+        localLeaderboard.sort((a, b) => parseInt(b.score) - parseInt(a.score)).slice(0, 3).forEach((player, index) => {
+            const item = document.createElement("div"); item.className = "leader-item";
+            item.innerHTML = `<span>#${index + 1} ${player.name}</span><span style='font-weight:bold'>${player.score}</span>`;
+            container.appendChild(item);
+        });
+    });
 }
 
 window.createNewServerRoom = function() {
@@ -176,21 +184,41 @@ window.createNewServerRoom = function() {
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     
-    // Регулярный бессмертный спам лобби в глобальную базу
+    // Вечная фиксация лобби в облаке Google
     setInterval(() => {
         if (isHost && myRoomId) {
-            sendRestPacket({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
+            fetch(`${FIREBASE_REST_URL}/rooms/${myRoomId}.json`, {
+                method: 'PUT',
+                body: JSON.stringify({ roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id, lastActive: Date.now() })
+            }).catch(e => {});
         }
-    }, 1500);
+    }, 2000);
 }
 
-// ПРИНУДИТЕЛЬНЫЙ ЗАПРОС КОМНАТ В ОБЛАКЕ С ВЕЧНОЙ КНОПКОЙ JOIN
 window.requestActiveRoomsList = function() {
     initAudio();
-    const container = document.getElementById("rooms-list"); if (container) container.innerHTML = "<div style='text-align:center;font-size:10px;color:#aaa;'>ПОИСК КОМНАТ...</div>";
-    sendRestPacket({ type: 'request_rooms', sender: myPlayerName });
-    // Если через 3 секунды комнат нет, пишем статус
-    setTimeout(() => { if (container && container.innerHTML.includes("ПОИСК КОМНАТ...")) container.innerHTML = "<div style='text-align:center;font-size:10px;color:#666;'>НЕТ АКТИВНЫХ ИГР</div>"; }, 3000);
+    const container = document.getElementById("rooms-list"); if (!container) return;
+    container.innerHTML = "<div style='text-align:center;font-size:10px;color:#aaa;'>ПОИСК КОМНАТ...</div>";
+    
+    fetch(`${FIREBASE_REST_URL}/rooms.json`)
+    .then(res => res.json()).then(data => {
+        container.innerHTML = "";
+        let foundAny = false;
+        if (data) {
+            let now = Date.now();
+            Object.keys(data).forEach(id => {
+                let room = data[id];
+                // Показываем только живые комнаты, созданные меньше 10 секунд назад
+                if (now - room.lastActive < 10000 && room.hostName !== myPlayerName) {
+                    foundAny = true;
+                    let roomDiv = document.createElement("div"); roomDiv.id = room.roomId; roomDiv.className = "room-item";
+                    roomDiv.innerHTML = `<span>🎮 Лобби: ${room.hostName}</span><button class="join-btn" onclick="joinServerRoom('${room.roomId}')">JOIN</button>`;
+                    container.appendChild(roomDiv);
+                }
+            });
+        }
+        if (!foundAny) container.innerHTML = "<div style='text-align:center;font-size:10px;color:#666;'>НЕТ АКТИВНЫХ ИГР</div>";
+    }).catch(e => { container.innerHTML = "<div style='text-align:center;font-size:10px;color:#ff5555;'>ОШИБКА СЕТИ</div>"; });
 }
 
 window.joinServerRoom = function(roomId) {
@@ -203,74 +231,47 @@ window.joinServerRoom = function(roomId) {
 
 function initNetwork() {
     document.getElementById("mp-status").innerHTML = "🟢 СЕТЬ АКТИВНА!";
-    const container = document.getElementById("rooms-list"); if (!container) return;
     
-    // Постоянное REST-слушание сети в фоне через длинный опрос (Long-Polling)
-    let lastTimetoken = "0";
+    // Регулярный сигнал онлайна в общую базу Google
     setInterval(() => {
-        fetch(`https://pndsn.com{CHANNEL}/0?tt=${lastTimetoken}`)
+        fetch(`${FIREBASE_REST_URL}/online/${myPlayerName}.json`, { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(e => {});
+    }, 4000);
+
+    // Слушание онлайна других игроков на сайте
+    setInterval(() => {
+        fetch(`${FIREBASE_REST_URL}/online.json`)
         .then(res => res.json()).then(data => {
-            if (data && data.t && data.t.t) lastTimetoken = data.t.t;
-            if (data && data.m) {
-                data.m.forEach(packet => {
-                    const msg = packet.d;
-                    
-                    // ХОСТ ОТВЕЧАЕТ НА ЗАПРОСЫ ИГРОКОВ
-                    if (msg.type === 'request_rooms' && isHost && myRoomId) {
-                        sendRestPacket({ type: 'create_room', roomId: myRoomId, hostName: myPlayerName, skin: currentSkin.id });
-                    }
-
-                    // РЕНДЕРИМ ЖЕЛЕЗНУЮ КНОПКУ JOIN
-                    if (msg.type === 'create_room' && msg.hostName !== myPlayerName) {
-                        if (container.innerHTML.includes("ПОИСК КОМНАТ...") || container.innerHTML.includes("НЕТ АКТИВНЫХ ИГР")) container.innerHTML = "";
-                        let roomDiv = document.getElementById(msg.roomId);
-                        if (!roomDiv) {
-                            roomDiv = document.createElement("div"); roomDiv.id = msg.roomId; roomDiv.className = "room-item";
-                            container.appendChild(roomDiv);
-                        }
-                        roomDiv.innerHTML = `<span>🎮 Лобби: ${msg.hostName}</span><button class="join-btn" onclick="joinServerRoom('${msg.roomId}')">JOIN</button>`;
-                    }
-
-                    // ОТОБРАЖАЕМ ЖИВЫХ ИГРОКОВ ОНЛАЙН НА САЙТЕ
-                    if (msg.type === 'ping_user' && msg.sender !== myPlayerName) {
-                        if (container.innerHTML.includes("ПОИСК КОМНАТ...") || container.innerHTML.includes("НЕТ АКТИВНЫХ ИГР")) container.innerHTML = "";
-                        let userDiv = document.getElementById("usr_" + msg.sender);
-                        if (!userDiv) {
-                            userDiv = document.createElement("div"); userDiv.id = "usr_" + msg.sender; userDiv.className = "room-item";
-                            container.insertBefore(userDiv, container.firstChild);
-                        }
-                        userDiv.innerHTML = `<span style="color:#00ff00">● ${msg.sender}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
-                    }
-
-                    // СИНХРОНИЗАЦИЯ РЕКОРДОВ ТОП-3 МЕЖДУ СМАРТФОНОМ И ПК
-                    if (msg.type === 'sync_leaderboard' && msg.sender !== myPlayerName) {
-                        let found = localLeaderboard.find(p => p.name === msg.sender);
-                        if (found) { if (parseInt(msg.score) > found.score) found.score = parseInt(msg.score); } 
-                        else { localLeaderboard.push({ name: msg.sender, score: parseInt(msg.score) }); }
-                        fetchOnlineLeaderboard();
-                    }
-
-                    // ДУЭЛЬНЫЙ СТРИМ КООРДИНАТ
-                    if (myRoomId && msg.roomId === myRoomId && msg.sender !== myPlayerName) {
-                        if (msg.type === 'game_sync') {
-                            enemyBird.active = true; enemyBird.y = msg.y; enemyBird.currentSkinId = msg.skin;
-                            if (!isHost && msg.pipes) pipes = JSON.parse(msg.pipes);
-                        }
+            const container = document.getElementById("rooms-list"); if (!container) return;
+            document.querySelectorAll(".online-user-item").forEach(el => el.remove());
+            if (data) {
+                let now = Date.now();
+                Object.keys(data).forEach(user => {
+                    if (now - data[user] < 12000 && user !== myPlayerName) {
+                        let div = document.createElement("div"); div.className = "room-item online-user-item";
+                        div.innerHTML = `<span style="color:#00ff00">● ${user}</span><span style="font-size:9px;color:#aaa">ONLINE</span>`;
+                        container.insertBefore(div, container.firstChild);
                     }
                 });
             }
         }).catch(e => {});
-    }, 800);
+    }, 5000);
 
-    // Сигнал в эфир, что мы зашли на сайт
-    setInterval(() => { sendRestPacket({ type: 'ping_user', sender: myPlayerName }); }, 3000);
+    // Облачный дуэльный стрим движения птицы
+    setInterval(() => {
+        if (!myRoomId) return;
+        if (isHost) {
+            fetch(`${FIREBASE_REST_URL}/rooms/${myRoomId}/hostData.json`, { method: 'PUT', body: JSON.stringify({ y: bird.y, skin: currentSkin.id, pipes: JSON.stringify(pipes) }) }).catch(e => {});
+            fetch(`${FIREBASE_REST_URL}/rooms/${myRoomId}/guestData.json`).then(res => res.json()).then(d => {
+                if (d) { enemyBird.active = true; enemyBird.y = d.y; enemyBird.currentSkinId = d.skin; }
+            }).catch(e => {});
+        } else {
+            fetch(`${FIREBASE_REST_URL}/rooms/${myRoomId}/guestData.json`, { method: 'PUT', body: JSON.stringify({ y: bird.y, skin: currentSkin.id }) }).catch(e => {});
+            fetch(`${FIREBASE_REST_URL}/rooms/${myRoomId}/hostData.json`).then(res => res.json()).then(d => {
+                if (d) { enemyBird.active = true; enemyBird.y = d.y; enemyBird.currentSkinId = d.skin; if (d.pipes) pipes = JSON.parse(d.pipes); }
+            }).catch(e => {});
+        }
+    }, 120);
 }
-
-// Потоковый стрим координат птицы во время полета
-setInterval(() => {
-    if (!myRoomId) return;
-    sendRestPacket({ type: 'game_sync', roomId: myRoomId, sender: myPlayerName, y: bird.y, skin: currentSkin.id, pipes: isHost ? JSON.stringify(pipes) : null });
-}, 70);
 function drawPixelRect(x, y, w, h, fillColor) { 
     ctx.fillStyle = fillColor; ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
     ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.strokeRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h)); 
