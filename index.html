@@ -71,7 +71,7 @@ if (!myPlayerName) {
     localStorage.setItem('flappy_device_name_v12', myPlayerName);
 }
 
-// ОФИЦИАЛЬНАЯ БЕСПЛАТНАЯ И ДОСТУПНАЯ БАЗА ДАННЫХ GOOGLE FIREBASE REALTIME REST API
+// ОФИЦИАЛЬНАЯ БЕСПЛАТНАЯ БАЗА ДАННЫХ GOOGLE FIREBASE REALTIME REST API
 const FIREBASE_REST_URL = "https://firebaseio.com";
 
 let isHost = false, myRoomId = "", networkLoop = null;
@@ -114,7 +114,6 @@ function startAmbientMusic() {
     }, 1000);
 }
 
-// ФИРМЕННАЯ ФИЧА: Плавное превращение неба в сочный пиксельный багровый закат!
 function getSkyColor() {
     let factor = Math.min(score / 25, 1);
     let r = Math.floor(112 + (211 - 112) * factor);
@@ -143,7 +142,7 @@ function sendHighScoreOnline(finalScore) {
     if (existing) { if (finalScore > existing.score) existing.score = finalScore; } 
     else { localLeaderboard.push({name: myPlayerName, score: finalScore}); }
     
-    // ЖЕСТКИЙ ФИКС: Точный путь .json для отправки рекорда в глобальное облако Google
+    // ОТПРАВЛЯЕМ РЕКОРД В ГЛОБАЛЬНУЮ ОБЛАЧНУЮ БАЗУ GOOGLE FIREBASE
     fetch(`${FIREBASE_REST_URL}/leaderboard/${myPlayerName}.json`, {
         method: 'PUT',
         body: JSON.stringify({ name: myPlayerName, score: finalScore })
@@ -154,7 +153,7 @@ function sendHighScoreOnline(finalScore) {
 function fetchOnlineLeaderboard() {
     const container = document.getElementById("leader-items"); if (!container) return;
     
-    // ЖЕСТКИЙ ФИКС: Скачиваем общий мировой топ из валидного .json файла
+    // Скачиваем мировые рекорды из облака Google
     fetch(`${FIREBASE_REST_URL}/leaderboard.json`)
     .then(res => res.json()).then(data => {
         if (!data) return;
@@ -183,6 +182,7 @@ window.createNewServerRoom = function() {
     document.getElementById("host-btn").style.display = "none";
     document.getElementById("mp-status").innerHTML = "🟢 ТВОЯ КОМНАТА В ЛОББИ!";
     
+    // Вечная фиксация лобби в облаке Google
     setInterval(() => {
         if (isHost && myRoomId) {
             fetch(`${FIREBASE_REST_URL}/rooms/${myRoomId}.json`, {
@@ -206,6 +206,7 @@ window.requestActiveRoomsList = function() {
             let now = Date.now();
             Object.keys(data).forEach(id => {
                 let room = data[id];
+                // Показываем только живые комнаты
                 if (now - room.lastActive < 10000 && room.hostName !== myPlayerName) {
                     foundAny = true;
                     let roomDiv = document.createElement("div"); roomDiv.id = room.roomId; roomDiv.className = "room-item";
@@ -229,10 +230,12 @@ window.joinServerRoom = function(roomId) {
 function initNetwork() {
     document.getElementById("mp-status").innerHTML = "🟢 СЕТЬ АКТИВНА!";
     
+    // Регулярный сигнал онлайна в общую базу Google
     setInterval(() => {
         fetch(`${FIREBASE_REST_URL}/online/${myPlayerName}.json`, { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(e => {});
     }, 4000);
 
+    // Слушание онлайна других игроков на сайте
     setInterval(() => {
         fetch(`${FIREBASE_REST_URL}/online.json`)
         .then(res => res.json()).then(data => {
@@ -251,7 +254,7 @@ function initNetwork() {
         }).catch(e => {});
     }, 5000);
 
-    // ЖЕСТКИЙ ФИКС СЕТЕВЫХ ПУТЕЙ: Все вложенные ветки строго закрываются расширением .json!
+    // Облачный дуэльный стрим движения птицы (Все вложенные ветки строго закрываются расширением .json)
     setInterval(() => {
         if (!myRoomId) return;
         if (isHost) {
@@ -372,7 +375,7 @@ function draw() {
     pipes.forEach(p => { 
         drawPixelRect(p.x, 0, p.w, p.top, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), 0, 6, Math.floor(p.top)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), 0, 2, Math.floor(p.top));
         drawPixelRect(p.x - 4, p.top - 24, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(p.top - 22), 2, 20);
-        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(p.bottom)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(p.bottom));
+        let bTop = canvas.height - p.bottom; drawPixelRect(p.x, bTop, p.w, p.bottom, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 6, Math.floor(bTop)); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x + 6), Math.floor(bTop), 2, Math.floor(bTop));
         drawPixelRect(p.x - 4, bTop, p.w + 8, 24, "#73bf2e"); ctx.fillStyle = "#9de64e"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 6, 20); ctx.fillStyle = "#fff"; ctx.fillRect(Math.floor(p.x - 2), Math.floor(bTop + 2), 2, 20);
     });
 
